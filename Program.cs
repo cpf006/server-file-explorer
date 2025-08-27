@@ -4,15 +4,13 @@ namespace TestProject {
             var builder = WebApplication.CreateBuilder(args);
 
             // Add services to the container.
-
             builder.Services.AddControllers();
+            builder.Services.Configure<FileExplorerOptions>(builder.Configuration.GetSection("FileExplorer"));
 
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
-
             app.UseHttpsRedirection();
-
             app.UseStaticFiles();
 
             app.MapControllers();

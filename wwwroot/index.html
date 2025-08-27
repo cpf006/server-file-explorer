@@ -2,9 +2,92 @@
 <html>
 <head>
     <meta charset="utf-8" />
-    <title></title>
+    <title>File Explorer</title>
 </head>
 <body>
-    Hello World!
+    <h1>File Explorer</h1>
+    <div id="controls">
+        <input type="text" id="search" placeholder="Search" />
+        <button id="searchBtn">Search</button>
+        <input type="file" id="uploadFile" />
+        <button id="uploadBtn">Upload</button>
+    </div>
+    <div id="stats"></div>
+    <ul id="listing"></ul>
+    <script>
+        const apiBase = '/api/files';
+
+        function load() {
+            const params = new URLSearchParams(window.location.search);
+            const path = params.get('path') || '';
+            fetch(apiBase + '?path=' + encodeURIComponent(path))
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('stats').textContent =
+                        `Folders: ${data.stats.directoryCount}, Files: ${data.stats.fileCount}, Size: ${data.stats.totalSize} bytes`;
+
+                    const list = document.getElementById('listing');
+                    list.innerHTML = '';
+
+                    if (path) {
+                        const parent = path.split('/').slice(0, -1).join('/');
+                        const li = document.createElement('li');
+                        li.innerHTML = `<a href="?path=${encodeURIComponent(parent)}">..</a>`;
+                        list.appendChild(li);
+                    }
+
+                    data.directories.forEach(d => {
+                        const li = document.createElement('li');
+                        const newPath = (path ? path + '/' : '') + d;
+                        li.innerHTML = `<a href="?path=${encodeURIComponent(newPath)}">${d}/</a>`;
+                        list.appendChild(li);
+                    });
+
+                    data.files.forEach(f => {
+                        const li = document.createElement('li');
+                        const filePath = (path ? path + '/' : '') + f.name;
+                        li.innerHTML = `${f.name} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(filePath)}">download</a>`;
+                        list.appendChild(li);
+                    });
+
+                    document.getElementById('uploadBtn').onclick = () => {
+                        const fileInput = document.getElementById('uploadFile');
+                        const file = fileInput.files[0];
+                        if (!file) return;
+                        const form = new FormData();
+                        form.append('file', file);
+                        fetch(apiBase + '/upload?path=' + encodeURIComponent(path), {
+                            method: 'POST',
+                            body: form
+                        }).then(() => load());
+                    };
+
+                    document.getElementById('searchBtn').onclick = () => {
+                        const q = document.getElementById('search').value;
+                        fetch(apiBase + '/search?query=' + encodeURIComponent(q))
+                            .then(r => r.json())
+                            .then(showSearch);
+                    };
+                });
+        }
+
+        function showSearch(data) {
+            const list = document.getElementById('listing');
+            list.innerHTML = '';
+            data.directories.forEach(d => {
+                const li = document.createElement('li');
+                li.innerHTML = `<strong>Dir:</strong> <a href="?path=${encodeURIComponent(d.path)}">${d.path}</a>`;
+                list.appendChild(li);
+            });
+            data.files.forEach(f => {
+                const li = document.createElement('li');
+                li.innerHTML = `<strong>File:</strong> ${f.path} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(f.path)}">download</a>`;
+                list.appendChild(li);
+            });
+            document.getElementById('stats').textContent = 'Search results';
+        }
+
+        window.onload = load;
+    </script>
 </body>
 </html>
