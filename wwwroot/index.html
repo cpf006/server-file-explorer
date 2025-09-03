@@ -12,6 +12,7 @@
         <button id="searchBtn">Search</button>
         <input type="file" id="uploadFile" />
         <button id="uploadBtn">Upload</button>
+        <button id="createFolderBtn">Create Folder</button>
         <button id="zipBtn">Download Zip</button>
         <span id="progress"></span>
     </div>
@@ -52,9 +53,9 @@
                     const enc = encodeURIComponent(newPath);
                     li.innerHTML = `<input type="checkbox" class="select" data-path="${enc}" /> ` +
                         `<a href="?path=${encodeURIComponent(newPath)}">${d}/</a>` +
-                        ` <button onclick="del('${enc}')">del</button>` +
-                        ` <button onclick="movePrompt('${enc}')">move</button>` +
-                        ` <button onclick="copyPrompt('${enc}')">copy</button>`;
+                        ` <button onclick="deletePath('${enc}')">delete</button>` +
+                        ` <button onclick="movePath('${enc}')">move</button>` +
+                        ` <button onclick="copyPath('${enc}')">copy</button>`;
                     list.appendChild(li);
                 });
 
@@ -69,9 +70,9 @@
                     li.innerHTML = `<input type="checkbox" class="select" data-path="${enc}" /> ` +
                         `${f.name} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(filePath)}">download</a>` +
                         preview +
-                        ` <button onclick="del('${enc}')">del</button>` +
-                        ` <button onclick="movePrompt('${enc}')">move</button>` +
-                        ` <button onclick="copyPrompt('${enc}')">copy</button>`;
+                        ` <button onclick="deletePath('${enc}')">delete</button>` +
+                        ` <button onclick="movePath('${enc}')">move</button>` +
+                        ` <button onclick="copyPath('${enc}')">copy</button>`;
                     list.appendChild(li);
                 });
 
@@ -99,6 +100,14 @@
                     fetch(apiBase + '/search?query=' + encodeURIComponent(q))
                         .then(r => r.json())
                         .then(showSearch);
+                };
+
+                document.getElementById('createFolderBtn').onclick = () => {
+                    const name = prompt('Folder name:');
+                    if (!name) return;
+                    const newPath = (path ? path + '/' : '') + name;
+                    fetch(apiBase + '/mkdir?path=' + encodeURIComponent(newPath), { method: 'POST' })
+                        .then(() => load());
                 };
 
                 document.getElementById('zipBtn').onclick = async () => {
@@ -151,33 +160,30 @@
         document.getElementById('stats').textContent = 'Search results';
     }
 
-    function del(p) {
+    function deletePath(p) {
         const path = decodeURIComponent(p);
         if (!confirm('Delete ' + path + '?')) return;
         fetch(apiBase + '?path=' + encodeURIComponent(path), { method: 'DELETE' })
             .then(() => load());
     }
 
-    function movePrompt(p) {
+    function promptAndPost(p, url, message) {
         const path = decodeURIComponent(p);
-        const dest = prompt('Move to:', path);
+        const dest = prompt(message, path);
         if (!dest) return;
-        fetch(apiBase + '/move', {
+        fetch(apiBase + url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ from: path, to: dest })
         }).then(() => load());
     }
 
-    function copyPrompt(p) {
-        const path = decodeURIComponent(p);
-        const dest = prompt('Copy to:', path);
-        if (!dest) return;
-        fetch(apiBase + '/copy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ from: path, to: dest })
-        }).then(() => load());
+    function movePath(p) {
+        promptAndPost(p, '/move', 'Move to:');
+    }
+
+    function copyPath(p) {
+        promptAndPost(p, '/copy', 'Copy to:');
     }
 
     let map;
