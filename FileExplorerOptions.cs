@@ -4,7 +4,7 @@ namespace TestProject;
 
 public class FileExplorerOptions
 {
-    // Root directory for all file operations ("A server side home directory should be configurable via variable."). Uses a safe default folder.
+    // Root directory for all file work. The spec asks for a configurable home folder, so we default to a sandboxed "DefaultDirectory".
     public string RootPath { get; set; } = Path.Combine(AppContext.BaseDirectory, "DefaultDirectory");
 }
 
