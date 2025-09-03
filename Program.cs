@@ -12,6 +12,7 @@ namespace TestProject {
             }
 
             builder.Services.AddControllers();
+            builder.Services.AddHttpsRedirection(options => options.HttpsPort = 5001);
             builder.Services.Configure<FileExplorerOptions>(builder.Configuration.GetSection("FileExplorer"));
 
             var app = builder.Build();
