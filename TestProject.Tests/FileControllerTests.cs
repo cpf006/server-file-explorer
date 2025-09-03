@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
@@ -20,6 +21,10 @@ public class FileControllerTests : IAsyncLifetime
         Directory.CreateDirectory(Path.Combine(_rootDir, "sub"));
         File.WriteAllText(Path.Combine(_rootDir, "root.txt"), "root");
         File.WriteAllText(Path.Combine(_rootDir, "sub", "a.txt"), "hello");
+
+        var dataDir = Path.Combine(Directory.GetCurrentDirectory(), "Data");
+        File.Copy(Path.Combine(dataDir, "point.geojson"), Path.Combine(_rootDir, "point.geojson"));
+        File.Copy(Path.Combine(dataDir, "point.kml"), Path.Combine(_rootDir, "point.kml"));
 
         Environment.SetEnvironmentVariable("FileExplorer__RootPath", _rootDir);
         _factory = new WebApplicationFactory<Program>();
@@ -97,6 +102,30 @@ public class FileControllerTests : IAsyncLifetime
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
         Assert.NotNull(archive.GetEntry("root.txt"));
         Assert.NotNull(archive.GetEntry("sub/a.txt"));
+    }
+
+    [Fact]
+    public async Task GeoPreview_ReturnsGeoJson_ForGeoJsonFile()
+    {
+        var client = _factory.CreateClient();
+        var json = await client.GetStringAsync("/api/files/geo-preview?path=point.geojson");
+        using var doc = JsonDocument.Parse(json);
+        var coords = doc.RootElement.GetProperty("features")[0]
+            .GetProperty("geometry").GetProperty("coordinates");
+        Assert.Equal(1.0, coords[0].GetDouble());
+        Assert.Equal(2.0, coords[1].GetDouble());
+    }
+
+    [Fact]
+    public async Task GeoPreview_ConvertsKmlToGeoJson()
+    {
+        var client = _factory.CreateClient();
+        var json = await client.GetStringAsync("/api/files/geo-preview?path=point.kml");
+        using var doc = JsonDocument.Parse(json);
+        var coords = doc.RootElement.GetProperty("features")[0]
+            .GetProperty("geometry").GetProperty("coordinates");
+        Assert.Equal(1.0, coords[0].GetDouble());
+        Assert.Equal(2.0, coords[1].GetDouble());
     }
 
     private class ListResponse
