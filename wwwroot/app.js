@@ -275,4 +275,3 @@ document.getElementById('closePreview').onclick = () => {
 };
 
 window.onload = load;
-
