@@ -68,6 +68,8 @@ public class FileController : ControllerBase
     }
 
     [HttpPost("upload")]
+    [RequestSizeLimit(long.MaxValue)]
+    [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue)]
     public async Task<IActionResult> Upload([FromQuery] string? path, IFormFile file)
     {
         if (file == null || file.Length == 0)

@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
+using System.Net.Http.Headers;
 
 namespace TestProject.Tests;
 
@@ -113,6 +114,20 @@ public class FileControllerTests : IAsyncLifetime
         response.EnsureSuccessStatusCode();
         Assert.True(Directory.Exists(Path.Combine(_rootDir, "sub_copy")));
         Assert.True(System.IO.File.Exists(Path.Combine(_rootDir, "sub_copy", "a.txt")));
+    }
+
+    [Fact]
+    public async Task Upload_AllowsLargeFiles()
+    {
+        var client = _factory.CreateClient();
+        var content = new MultipartFormDataContent();
+        var bytes = new byte[40 * 1024 * 1024];
+        var fileContent = new ByteArrayContent(bytes);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        content.Add(fileContent, "file", "big.bin");
+        var response = await client.PostAsync("/api/files/upload", content);
+        response.EnsureSuccessStatusCode();
+        Assert.True(System.IO.File.Exists(Path.Combine(_rootDir, "big.bin")));
     }
 
     [Fact]
