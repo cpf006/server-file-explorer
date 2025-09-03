@@ -11,7 +11,7 @@ A minimal .NET 9 project that exposes an API and single-page app for browsing fi
 ```
 dotnet run
 ```
-The app starts on the default Kestrel ports. On first run it creates a `DefaultDirectory` with a placeholder file so project sources stay isolated.
+The app listens on http://localhost:5000 and https://localhost:5001. On first run it creates a `DefaultDirectory` with a placeholder file so project sources stay isolated.
 
 ## Testing
 ```
