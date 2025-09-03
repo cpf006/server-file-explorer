@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using System.IO;
+using System.IO.Compression;
 
 namespace TestProject.Controllers;
 
@@ -98,6 +99,8 @@ public class FileController : ControllerBase
 
     public record PathRequest(string From, string To);
 
+    public record PathsRequest(List<string> Paths);
+
     [HttpPost("move")]
     public IActionResult Move([FromBody] PathRequest request)
     {
@@ -143,6 +146,48 @@ public class FileController : ControllerBase
         }
 
         return Ok();
+    }
+
+    [HttpPost("zip")]
+    public async Task<IActionResult> Zip([FromBody] PathsRequest request)
+    {
+        if (request.Paths == null || request.Paths.Count == 0)
+            return BadRequest("No paths supplied");
+
+        var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, true))
+        {
+            foreach (var relative in request.Paths)
+            {
+                var full = ResolvePath(relative);
+                await AddToArchive(archive, full);
+            }
+        }
+        ms.Position = 0;
+        return File(ms, "application/zip", "files.zip");
+    }
+
+    private async Task AddToArchive(ZipArchive archive, string fullPath)
+    {
+        if (System.IO.File.Exists(fullPath))
+        {
+            var entryPath = Path.GetRelativePath(_root, fullPath).Replace('\\', '/');
+            var entry = archive.CreateEntry(entryPath, CompressionLevel.Fastest);
+            await using var src = System.IO.File.OpenRead(fullPath);
+            await using var dest = entry.Open();
+            await src.CopyToAsync(dest);
+        }
+        else if (Directory.Exists(fullPath))
+        {
+            foreach (var file in Directory.EnumerateFiles(fullPath, "*", SearchOption.AllDirectories))
+            {
+                var entryPath = Path.GetRelativePath(_root, file).Replace('\\', '/');
+                var entry = archive.CreateEntry(entryPath, CompressionLevel.Fastest);
+                await using var src = System.IO.File.OpenRead(file);
+                await using var dest = entry.Open();
+                await src.CopyToAsync(dest);
+            }
+        }
     }
 
     private static void CopyDirectory(string sourceDir, string destDir)
