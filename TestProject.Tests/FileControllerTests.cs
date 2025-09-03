@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.IO.Compression;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -84,6 +85,18 @@ public class FileControllerTests : IAsyncLifetime
         response.EnsureSuccessStatusCode();
         Assert.True(Directory.Exists(Path.Combine(_rootDir, "sub_copy")));
         Assert.True(System.IO.File.Exists(Path.Combine(_rootDir, "sub_copy", "a.txt")));
+    }
+
+    [Fact]
+    public async Task Zip_ReturnsArchive()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/files/zip", new { paths = new[] { "root.txt", "sub" } });
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        Assert.NotNull(archive.GetEntry("root.txt"));
+        Assert.NotNull(archive.GetEntry("sub/a.txt"));
     }
 
     private class ListResponse

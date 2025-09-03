@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8" />
@@ -11,120 +11,165 @@
         <button id="searchBtn">Search</button>
         <input type="file" id="uploadFile" />
         <button id="uploadBtn">Upload</button>
+        <button id="zipBtn">Download Zip</button>
+        <span id="progress"></span>
     </div>
     <div id="stats"></div>
     <ul id="listing"></ul>
     <script>
-        const apiBase = '/api/files';
+    const apiBase = '/api/files';
+    const selected = new Set();
 
-        function load() {
-            const params = new URLSearchParams(window.location.search);
-            const path = params.get('path') || '';
-            fetch(apiBase + '?path=' + encodeURIComponent(path))
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('stats').textContent =
-                        `Folders: ${data.stats.directoryCount}, Files: ${data.stats.fileCount}, Size: ${data.stats.totalSize} bytes`;
+    function load() {
+        const params = new URLSearchParams(window.location.search);
+        const path = params.get('path') || '';
+        fetch(apiBase + '?path=' + encodeURIComponent(path))
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('stats').textContent =
+                    `Folders: ${data.stats.directoryCount}, Files: ${data.stats.fileCount}, Size: ${data.stats.totalSize} bytes`;
 
-                    const list = document.getElementById('listing');
-                    list.innerHTML = '';
+                const list = document.getElementById('listing');
+                list.innerHTML = '';
+                selected.clear();
 
-                    if (path) {
-                        const parent = path.split('/').slice(0, -1).join('/');
-                        const li = document.createElement('li');
-                        li.innerHTML = `<a href="?path=${encodeURIComponent(parent)}">..</a>`;
-                        list.appendChild(li);
-                    }
+                if (path) {
+                    const parent = path.split('/').slice(0, -1).join('/');
+                    const li = document.createElement('li');
+                    li.innerHTML = `<a href="?path=${encodeURIComponent(parent)}">..</a>`;
+                    list.appendChild(li);
+                }
 
-                    data.directories.forEach(d => {
-                        const li = document.createElement('li');
-                        const newPath = (path ? path + '/' : '') + d;
-                        const enc = encodeURIComponent(newPath);
-                        li.innerHTML = `<a href="?path=${encodeURIComponent(newPath)}">${d}/</a>
-                            <button onclick="del('${enc}')">del</button>
-                            <button onclick="movePrompt('${enc}')">move</button>
-                            <button onclick="copyPrompt('${enc}')">copy</button>`;
-                        list.appendChild(li);
-                    });
+                data.directories.forEach(d => {
+                    const li = document.createElement('li');
+                    const newPath = (path ? path + '/' : '') + d;
+                    const enc = encodeURIComponent(newPath);
+                    li.innerHTML = `<input type="checkbox" class="select" data-path="${enc}" /> ` +
+                        `<a href="?path=${encodeURIComponent(newPath)}">${d}/</a>` +
+                        ` <button onclick="del('${enc}')">del</button>` +
+                        ` <button onclick="movePrompt('${enc}')">move</button>` +
+                        ` <button onclick="copyPrompt('${enc}')">copy</button>`;
+                    list.appendChild(li);
+                });
 
-                    data.files.forEach(f => {
-                        const li = document.createElement('li');
-                        const filePath = (path ? path + '/' : '') + f.name;
-                        const enc = encodeURIComponent(filePath);
-                        li.innerHTML = `${f.name} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(filePath)}">download</a>
-                            <button onclick="del('${enc}')">del</button>
-                            <button onclick="movePrompt('${enc}')">move</button>
-                            <button onclick="copyPrompt('${enc}')">copy</button>`;
-                        list.appendChild(li);
-                    });
+                data.files.forEach(f => {
+                    const li = document.createElement('li');
+                    const filePath = (path ? path + '/' : '') + f.name;
+                    const enc = encodeURIComponent(filePath);
+                    li.innerHTML = `<input type="checkbox" class="select" data-path="${enc}" /> ` +
+                        `${f.name} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(filePath)}">download</a>` +
+                        ` <button onclick="del('${enc}')">del</button>` +
+                        ` <button onclick="movePrompt('${enc}')">move</button>` +
+                        ` <button onclick="copyPrompt('${enc}')">copy</button>`;
+                    list.appendChild(li);
+                });
 
-                    document.getElementById('uploadBtn').onclick = () => {
-                        const fileInput = document.getElementById('uploadFile');
-                        const file = fileInput.files[0];
-                        if (!file) return;
-                        const form = new FormData();
-                        form.append('file', file);
-                        fetch(apiBase + '/upload?path=' + encodeURIComponent(path), {
-                            method: 'POST',
-                            body: form
-                        }).then(() => load());
-                    };
-
-                    document.getElementById('searchBtn').onclick = () => {
-                        const q = document.getElementById('search').value;
-                        fetch(apiBase + '/search?query=' + encodeURIComponent(q))
-                            .then(r => r.json())
-                            .then(showSearch);
+                document.querySelectorAll('.select').forEach(cb => {
+                    cb.onchange = () => {
+                        const p = decodeURIComponent(cb.dataset.path);
+                        if (cb.checked) selected.add(p); else selected.delete(p);
                     };
                 });
-        }
 
-        function showSearch(data) {
-            const list = document.getElementById('listing');
-            list.innerHTML = '';
-            data.directories.forEach(d => {
-                const li = document.createElement('li');
-                li.innerHTML = `<strong>Dir:</strong> <a href="?path=${encodeURIComponent(d.path)}">${d.path}</a>`;
-                list.appendChild(li);
+                document.getElementById('uploadBtn').onclick = () => {
+                    const fileInput = document.getElementById('uploadFile');
+                    const file = fileInput.files[0];
+                    if (!file) return;
+                    const form = new FormData();
+                    form.append('file', file);
+                    fetch(apiBase + '/upload?path=' + encodeURIComponent(path), {
+                        method: 'POST',
+                        body: form
+                    }).then(() => load());
+                };
+
+                document.getElementById('searchBtn').onclick = () => {
+                    const q = document.getElementById('search').value;
+                    fetch(apiBase + '/search?query=' + encodeURIComponent(q))
+                        .then(r => r.json())
+                        .then(showSearch);
+                };
+
+                document.getElementById('zipBtn').onclick = async () => {
+                    if (selected.size === 0) return;
+                    const res = await fetch(apiBase + '/zip', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ paths: Array.from(selected) })
+                    });
+                    if (!res.ok) return;
+                    const total = parseInt(res.headers.get('Content-Length')) || 0;
+                    const reader = res.body.getReader();
+                    let received = 0;
+                    const chunks = [];
+                    const progress = document.getElementById('progress');
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                        received += value.length;
+                        if (total) progress.textContent = `Downloading... ${(received / total * 100).toFixed(1)}%`;
+                    }
+                    progress.textContent = '';
+                    const blob = new Blob(chunks, { type: 'application/zip' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'files.zip';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    selected.clear();
+                    document.querySelectorAll('.select').forEach(cb => cb.checked = false);
+                };
             });
-            data.files.forEach(f => {
-                const li = document.createElement('li');
-                li.innerHTML = `<strong>File:</strong> ${f.path} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(f.path)}">download</a>`;
-                list.appendChild(li);
-            });
-            document.getElementById('stats').textContent = 'Search results';
-        }
+    }
 
-        function del(p) {
-            const path = decodeURIComponent(p);
-            if (!confirm('Delete ' + path + '?')) return;
-            fetch(apiBase + '?path=' + encodeURIComponent(path), { method: 'DELETE' })
-                .then(() => load());
-        }
+    function showSearch(data) {
+        const list = document.getElementById('listing');
+        list.innerHTML = '';
+        data.directories.forEach(d => {
+            const li = document.createElement('li');
+            li.innerHTML = `<strong>Dir:</strong> <a href="?path=${encodeURIComponent(d.path)}">${d.path}</a>`;
+            list.appendChild(li);
+        });
+        data.files.forEach(f => {
+            const li = document.createElement('li');
+            li.innerHTML = `<strong>File:</strong> ${f.path} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(f.path)}">download</a>`;
+            list.appendChild(li);
+        });
+        document.getElementById('stats').textContent = 'Search results';
+    }
 
-        function movePrompt(p) {
-            const path = decodeURIComponent(p);
-            const dest = prompt('Move to:', path);
-            if (!dest) return;
-            fetch(apiBase + '/move', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ from: path, to: dest })
-            }).then(() => load());
-        }
+    function del(p) {
+        const path = decodeURIComponent(p);
+        if (!confirm('Delete ' + path + '?')) return;
+        fetch(apiBase + '?path=' + encodeURIComponent(path), { method: 'DELETE' })
+            .then(() => load());
+    }
 
-        function copyPrompt(p) {
-            const path = decodeURIComponent(p);
-            const dest = prompt('Copy to:', path);
-            if (!dest) return;
-            fetch(apiBase + '/copy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ from: path, to: dest })
-            }).then(() => load());
-        }
+    function movePrompt(p) {
+        const path = decodeURIComponent(p);
+        const dest = prompt('Move to:', path);
+        if (!dest) return;
+        fetch(apiBase + '/move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from: path, to: dest })
+        }).then(() => load());
+    }
 
-        window.onload = load;
+    function copyPrompt(p) {
+        const path = decodeURIComponent(p);
+        const dest = prompt('Copy to:', path);
+        if (!dest) return;
+        fetch(apiBase + '/copy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from: path, to: dest })
+        }).then(() => load());
+    }
+
+    window.onload = load;
     </script>
 </body>
 </html>
