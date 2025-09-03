@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using System.IO;
+using System.IO.Compression;
 
 namespace TestProject.Controllers;
 
@@ -80,6 +81,42 @@ public class FileController : ControllerBase
         await using var stream = System.IO.File.Create(dest);
         await file.CopyToAsync(stream);
         return Ok();
+    }
+
+    [HttpPost("zip")]
+    public IActionResult Zip([FromBody] string[] paths)
+    {
+        if (paths == null || paths.Length == 0)
+            return BadRequest();
+
+        var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, true))
+        {
+            foreach (var relative in paths)
+            {
+                var full = ResolvePath(relative);
+                if (System.IO.File.Exists(full))
+                {
+                    var entryName = Path.GetRelativePath(_root, full);
+                    archive.CreateEntryFromFile(full, entryName);
+                }
+                else if (Directory.Exists(full))
+                {
+                    foreach (var file in Directory.EnumerateFiles(full, "*", SearchOption.AllDirectories))
+                    {
+                        var entryName = Path.GetRelativePath(_root, file);
+                        archive.CreateEntryFromFile(file, entryName);
+                    }
+                }
+                else
+                {
+                    return NotFound();
+                }
+            }
+        }
+
+        stream.Position = 0;
+        return File(stream, "application/zip", "files.zip");
     }
 
     [HttpGet("search")]

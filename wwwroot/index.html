@@ -11,6 +11,7 @@
         <button id="searchBtn">Search</button>
         <input type="file" id="uploadFile" />
         <button id="uploadBtn">Upload</button>
+        <button id="zipBtn">Download Zip</button>
     </div>
     <div id="stats"></div>
     <ul id="listing"></ul>
@@ -39,14 +40,14 @@
                     data.directories.forEach(d => {
                         const li = document.createElement('li');
                         const newPath = (path ? path + '/' : '') + d;
-                        li.innerHTML = `<a href="?path=${encodeURIComponent(newPath)}">${d}/</a>`;
+                        li.innerHTML = `<input type="checkbox" value="${newPath}" /> <a href="?path=${encodeURIComponent(newPath)}">${d}/</a>`;
                         list.appendChild(li);
                     });
 
                     data.files.forEach(f => {
                         const li = document.createElement('li');
                         const filePath = (path ? path + '/' : '') + f.name;
-                        li.innerHTML = `${f.name} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(filePath)}">download</a>`;
+                        li.innerHTML = `<input type="checkbox" value="${filePath}" /> ${f.name} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(filePath)}">download</a>`;
                         list.appendChild(li);
                     });
 
@@ -68,6 +69,25 @@
                             .then(r => r.json())
                             .then(showSearch);
                     };
+                    document.getElementById('zipBtn').onclick = () => {
+                        const selected = Array.from(document.querySelectorAll('#listing input[type=checkbox]:checked')).map(cb => cb.value);
+                        if (selected.length === 0) return;
+                        fetch(apiBase + '/zip', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(selected)
+                        }).then(r => r.blob())
+                          .then(blob => {
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = 'files.zip';
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                              URL.revokeObjectURL(url);
+                          });
+                    };
                 });
         }
 
@@ -76,12 +96,12 @@
             list.innerHTML = '';
             data.directories.forEach(d => {
                 const li = document.createElement('li');
-                li.innerHTML = `<strong>Dir:</strong> <a href="?path=${encodeURIComponent(d.path)}">${d.path}</a>`;
+                li.innerHTML = `<input type="checkbox" value="${d.path}" /> <strong>Dir:</strong> <a href="?path=${encodeURIComponent(d.path)}">${d.path}</a>`;
                 list.appendChild(li);
             });
             data.files.forEach(f => {
                 const li = document.createElement('li');
-                li.innerHTML = `<strong>File:</strong> ${f.path} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(f.path)}">download</a>`;
+                li.innerHTML = `<input type="checkbox" value="${f.path}" /> <strong>File:</strong> ${f.path} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(f.path)}">download</a>`;
                 list.appendChild(li);
             });
             document.getElementById('stats').textContent = 'Search results';
