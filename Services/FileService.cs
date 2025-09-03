@@ -42,26 +42,19 @@ public class FileService : IFileService
 
     public void Move(string from, string to)
     {
-        var source = _resolver.ResolvePath(from);
-        var dest = _resolver.ResolvePath(to);
-
-        if (System.IO.File.Exists(source))
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            System.IO.File.Move(source, dest, true);
-        }
-        else if (Directory.Exists(source))
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            Directory.Move(source, dest);
-        }
-        else
-        {
-            throw new FileNotFoundException();
-        }
+        ProcessPath(from, to,
+            (source, dest) => System.IO.File.Move(source, dest, true),
+            (source, dest) => Directory.Move(source, dest));
     }
 
     public void Copy(string from, string to)
+    {
+        ProcessPath(from, to,
+            (source, dest) => System.IO.File.Copy(source, dest, true),
+            (source, dest) => CopyDirectory(source, dest));
+    }
+
+    private void ProcessPath(string from, string to, Action<string, string> fileAction, Action<string, string> dirAction)
     {
         var source = _resolver.ResolvePath(from);
         var dest = _resolver.ResolvePath(to);
@@ -69,11 +62,12 @@ public class FileService : IFileService
         if (System.IO.File.Exists(source))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            System.IO.File.Copy(source, dest, true);
+            fileAction(source, dest);
         }
         else if (Directory.Exists(source))
         {
-            CopyDirectory(source, dest);
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            dirAction(source, dest);
         }
         else
         {
