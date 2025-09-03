@@ -128,22 +128,18 @@ public class FileControllerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task GeoPreview_ReturnsGeoJson_ForGeoJsonFile()
+    public async Task Preview_ReturnsFileContent()
     {
         var client = _factory.CreateClient();
-        var json = await client.GetStringAsync("/api/files/geo-preview?path=point.geojson");
-        using var doc = JsonDocument.Parse(json);
-        var coords = doc.RootElement.GetProperty("features")[0]
-            .GetProperty("geometry").GetProperty("coordinates");
-        Assert.Equal(1.0, coords[0].GetDouble());
-        Assert.Equal(2.0, coords[1].GetDouble());
+        var text = await client.GetStringAsync("/api/preview?path=root.txt");
+        Assert.Equal("root", text.Trim());
     }
 
     [Fact]
-    public async Task GeoPreview_ConvertsKmlToGeoJson()
+    public async Task Preview_ConvertsKmlToGeoJson()
     {
         var client = _factory.CreateClient();
-        var json = await client.GetStringAsync("/api/files/geo-preview?path=point.kml");
+        var json = await client.GetStringAsync("/api/preview?path=point.kml");
         using var doc = JsonDocument.Parse(json);
         var coords = doc.RootElement.GetProperty("features")[0]
             .GetProperty("geometry").GetProperty("coordinates");
