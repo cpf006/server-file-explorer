@@ -104,7 +104,9 @@ async function load() {
                     body: form
                 });
                 load();
-            } catch {}
+            } catch (err) {
+                console.error(err);
+            }
         };
 
         document.getElementById('searchBtn').onclick = async () => {
@@ -113,7 +115,9 @@ async function load() {
                 const r = await apiFetch(apiBase + '/search?query=' + encodeURIComponent(q));
                 const d = await r.json();
                 showSearch(d);
-            } catch {}
+            } catch (err) {
+                console.error(err);
+            }
         };
 
         document.getElementById('createFolderBtn').onclick = async () => {
@@ -123,7 +127,9 @@ async function load() {
             try {
                 await apiFetch(apiBase + '/mkdir?path=' + encodeURIComponent(newPath), { method: 'POST' });
                 load();
-            } catch {}
+            } catch (err) {
+                console.error(err);
+            }
         };
 
         document.getElementById('zipBtn').onclick = async () => {
@@ -156,9 +162,13 @@ async function load() {
                 URL.revokeObjectURL(url);
                 selected.clear();
                 document.querySelectorAll('.select').forEach(cb => cb.checked = false);
-            } catch {}
+            } catch (err) {
+                console.error(err);
+            }
         };
-    } catch {}
+    } catch (err) {
+        console.error(err);
+    }
 }
 
 function showSearch(data) {
@@ -183,7 +193,9 @@ async function deletePath(p) {
     try {
         await apiFetch(apiBase + '?path=' + encodeURIComponent(path), { method: 'DELETE' });
         load();
-    } catch {}
+    } catch (err) {
+        console.error(err);
+    }
 }
 
 async function promptAndPost(p, url, message) {
@@ -197,7 +209,9 @@ async function promptAndPost(p, url, message) {
             body: JSON.stringify({ from: path, to: dest })
         });
         load();
-    } catch {}
+    } catch (err) {
+        console.error(err);
+    }
 }
 
 function movePath(p) {
@@ -241,7 +255,9 @@ async function preview(p) {
             const text = await r.text();
             container.innerHTML = `<pre style="white-space:pre-wrap;">${escapeHtml(text)}</pre>`;
         }
-    } catch {}
+    } catch (err) {
+        console.error(err);
+    }
 }
 
 function escapeHtml(str) {
