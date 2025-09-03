@@ -40,6 +40,7 @@ function isPreviewable(name) {
 async function load() {
     const params = new URLSearchParams(window.location.search);
     const path = params.get('path') || '';
+    document.getElementById('backBtn').style.display = 'none';
     try {
         const r = await apiFetch(apiBase + '?path=' + encodeURIComponent(path));
         const data = await r.json();
@@ -185,6 +186,12 @@ function showSearch(data) {
         list.appendChild(li);
     });
     document.getElementById('stats').textContent = 'Search results';
+    const back = document.getElementById('backBtn');
+    back.style.display = 'inline';
+    back.onclick = () => {
+        document.getElementById('search').value = '';
+        load();
+    };
 }
 
 async function deletePath(p) {
