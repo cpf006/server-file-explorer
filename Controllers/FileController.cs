@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using System.IO;
 using System.IO.Compression;
+using TestProject.Services;
 
 namespace TestProject.Controllers;
 
@@ -10,30 +10,20 @@ namespace TestProject.Controllers;
 [Route("api/files")]
 public class FileController : ControllerBase
 {
-    private readonly string _root;
+    private readonly PathResolver _resolver;
     private readonly ILogger<FileController> _logger;
 
-    // Pull the root path from options and normalize it.
-    public FileController(IOptions<FileExplorerOptions> options, ILogger<FileController> logger)
+    // Pull the root path from options and normalize it via PathResolver.
+    public FileController(PathResolver resolver, ILogger<FileController> logger)
     {
-        _root = Path.GetFullPath(options.Value.RootPath ?? Directory.GetCurrentDirectory());
+        _resolver = resolver;
         _logger = logger;
-    }
-
-    // Convert a user supplied path into one rooted under the configured directory.
-    private string ResolvePath(string? relative)
-    {
-        relative ??= string.Empty;
-        var combined = Path.GetFullPath(Path.Combine(_root, relative));
-        if (!combined.StartsWith(_root))
-            throw new InvalidOperationException("Invalid path");
-        return combined;
     }
 
     [HttpGet]
     public IActionResult Get([FromQuery] string? path)
     {
-        var full = ResolvePath(path);
+        var full = _resolver.ResolvePath(path);
         if (!Directory.Exists(full))
             return NotFound();
 
@@ -60,7 +50,7 @@ public class FileController : ControllerBase
     [HttpGet("download")]
     public IActionResult Download([FromQuery] string path)
     {
-        var full = ResolvePath(path);
+        var full = _resolver.ResolvePath(path);
         if (!System.IO.File.Exists(full))
             return NotFound();
         var fileName = Path.GetFileName(full);
@@ -75,7 +65,7 @@ public class FileController : ControllerBase
         if (file == null || file.Length == 0)
             return BadRequest("No file supplied");
 
-        var folder = ResolvePath(path);
+        var folder = _resolver.ResolvePath(path);
         if (!Directory.Exists(folder))
             return NotFound();
 
@@ -88,7 +78,7 @@ public class FileController : ControllerBase
     [HttpPost("mkdir")]
     public IActionResult CreateDirectory([FromQuery] string path)
     {
-        var full = ResolvePath(path);
+        var full = _resolver.ResolvePath(path);
         if (System.IO.File.Exists(full))
             return Conflict();
         Directory.CreateDirectory(full);
@@ -98,7 +88,7 @@ public class FileController : ControllerBase
     [HttpDelete]
     public IActionResult Delete([FromQuery] string path)
     {
-        var full = ResolvePath(path);
+        var full = _resolver.ResolvePath(path);
         if (System.IO.File.Exists(full))
             System.IO.File.Delete(full);
         else if (Directory.Exists(full))
@@ -116,8 +106,8 @@ public class FileController : ControllerBase
     [HttpPost("move")]
     public IActionResult Move([FromBody] PathRequest request)
     {
-        var source = ResolvePath(request.From);
-        var dest = ResolvePath(request.To);
+        var source = _resolver.ResolvePath(request.From);
+        var dest = _resolver.ResolvePath(request.To);
 
         if (System.IO.File.Exists(source))
         {
@@ -140,8 +130,8 @@ public class FileController : ControllerBase
     [HttpPost("copy")]
     public IActionResult Copy([FromBody] PathRequest request)
     {
-        var source = ResolvePath(request.From);
-        var dest = ResolvePath(request.To);
+        var source = _resolver.ResolvePath(request.From);
+        var dest = _resolver.ResolvePath(request.To);
 
         if (System.IO.File.Exists(source))
         {
@@ -171,7 +161,7 @@ public class FileController : ControllerBase
         {
             foreach (var relative in request.Paths)
             {
-                var full = ResolvePath(relative);
+                var full = _resolver.ResolvePath(relative);
                 await AddToArchive(archive, full);
             }
         }
@@ -183,7 +173,7 @@ public class FileController : ControllerBase
     {
         if (System.IO.File.Exists(fullPath))
         {
-            var entryPath = Path.GetRelativePath(_root, fullPath).Replace('\\', '/');
+            var entryPath = Path.GetRelativePath(_resolver.RootPath, fullPath).Replace('\\', '/');
             var entry = archive.CreateEntry(entryPath, CompressionLevel.Fastest);
             await using var src = System.IO.File.OpenRead(fullPath);
             await using var dest = entry.Open();
@@ -193,7 +183,7 @@ public class FileController : ControllerBase
         {
             foreach (var file in Directory.EnumerateFiles(fullPath, "*", SearchOption.AllDirectories))
             {
-                var entryPath = Path.GetRelativePath(_root, file).Replace('\\', '/');
+                var entryPath = Path.GetRelativePath(_resolver.RootPath, file).Replace('\\', '/');
                 var entry = archive.CreateEntry(entryPath, CompressionLevel.Fastest);
                 await using var src = System.IO.File.OpenRead(file);
                 await using var dest = entry.Open();
@@ -222,13 +212,14 @@ public class FileController : ControllerBase
     [HttpGet("search")]
     public IActionResult Search([FromQuery] string query)
     {
-        var files = Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories)
+        var root = _resolver.RootPath;
+        var files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
             .Where(p => Path.GetFileName(p).Contains(query, StringComparison.OrdinalIgnoreCase))
-            .Select(p => new { path = Path.GetRelativePath(_root, p), size = new FileInfo(p).Length });
+            .Select(p => new { path = Path.GetRelativePath(root, p), size = new FileInfo(p).Length });
 
-        var directories = Directory.EnumerateDirectories(_root, "*", SearchOption.AllDirectories)
+        var directories = Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories)
             .Where(p => Path.GetFileName(p).Contains(query, StringComparison.OrdinalIgnoreCase))
-            .Select(p => new { path = Path.GetRelativePath(_root, p) });
+            .Select(p => new { path = Path.GetRelativePath(root, p) });
 
         return Ok(new { files, directories });
     }
