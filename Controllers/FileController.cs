@@ -4,9 +4,7 @@ using System.IO;
 
 namespace TestProject.Controllers;
 
-/// <summary>
-/// Web API for browsing and manipulating files within a configured root directory.
-/// </summary>
+// Web API for browsing and manipulating files within a configured root directory.
 [ApiController]
 [Route("api/files")]
 public class FileController : ControllerBase
@@ -14,12 +12,14 @@ public class FileController : ControllerBase
     private readonly string _root;
     private readonly ILogger<FileController> _logger;
 
+    // Pull the root path from options and normalize it.
     public FileController(IOptions<FileExplorerOptions> options, ILogger<FileController> logger)
     {
         _root = Path.GetFullPath(options.Value.RootPath ?? Directory.GetCurrentDirectory());
         _logger = logger;
     }
 
+    // Convert a user supplied path into one rooted under the configured directory.
     private string ResolvePath(string? relative)
     {
         relative ??= string.Empty;
