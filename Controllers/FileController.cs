@@ -106,19 +106,7 @@ public class FileController : ControllerBase
         else
             return NotFound();
 
-        CleanupEmptyDirectories(Path.GetDirectoryName(full)!);
         return Ok();
-    }
-
-    private void CleanupEmptyDirectories(string? directory)
-    {
-        while (!string.IsNullOrEmpty(directory) && directory.StartsWith(_root) && directory != _root)
-        {
-            if (Directory.EnumerateFileSystemEntries(directory).Any())
-                break;
-            Directory.Delete(directory);
-            directory = Path.GetDirectoryName(directory);
-        }
     }
 
     public record PathRequest(string From, string To);
