@@ -39,14 +39,22 @@
                     data.directories.forEach(d => {
                         const li = document.createElement('li');
                         const newPath = (path ? path + '/' : '') + d;
-                        li.innerHTML = `<a href="?path=${encodeURIComponent(newPath)}">${d}/</a>`;
+                        const enc = encodeURIComponent(newPath);
+                        li.innerHTML = `<a href="?path=${encodeURIComponent(newPath)}">${d}/</a>
+                            <button onclick="del('${enc}')">del</button>
+                            <button onclick="movePrompt('${enc}')">move</button>
+                            <button onclick="copyPrompt('${enc}')">copy</button>`;
                         list.appendChild(li);
                     });
 
                     data.files.forEach(f => {
                         const li = document.createElement('li');
                         const filePath = (path ? path + '/' : '') + f.name;
-                        li.innerHTML = `${f.name} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(filePath)}">download</a>`;
+                        const enc = encodeURIComponent(filePath);
+                        li.innerHTML = `${f.name} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(filePath)}">download</a>
+                            <button onclick="del('${enc}')">del</button>
+                            <button onclick="movePrompt('${enc}')">move</button>
+                            <button onclick="copyPrompt('${enc}')">copy</button>`;
                         list.appendChild(li);
                     });
 
@@ -85,6 +93,35 @@
                 list.appendChild(li);
             });
             document.getElementById('stats').textContent = 'Search results';
+        }
+
+        function del(p) {
+            const path = decodeURIComponent(p);
+            if (!confirm('Delete ' + path + '?')) return;
+            fetch(apiBase + '?path=' + encodeURIComponent(path), { method: 'DELETE' })
+                .then(() => load());
+        }
+
+        function movePrompt(p) {
+            const path = decodeURIComponent(p);
+            const dest = prompt('Move to:', path);
+            if (!dest) return;
+            fetch(apiBase + '/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ from: path, to: dest })
+            }).then(() => load());
+        }
+
+        function copyPrompt(p) {
+            const path = decodeURIComponent(p);
+            const dest = prompt('Copy to:', path);
+            if (!dest) return;
+            fetch(apiBase + '/copy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ from: path, to: dest })
+            }).then(() => load());
         }
 
         window.onload = load;

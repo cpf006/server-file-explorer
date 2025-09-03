@@ -82,6 +82,86 @@ public class FileController : ControllerBase
         return Ok();
     }
 
+    [HttpDelete]
+    public IActionResult Delete([FromQuery] string path)
+    {
+        var full = ResolvePath(path);
+        if (System.IO.File.Exists(full))
+            System.IO.File.Delete(full);
+        else if (Directory.Exists(full))
+            Directory.Delete(full, true);
+        else
+            return NotFound();
+
+        return Ok();
+    }
+
+    public record PathRequest(string From, string To);
+
+    [HttpPost("move")]
+    public IActionResult Move([FromBody] PathRequest request)
+    {
+        var source = ResolvePath(request.From);
+        var dest = ResolvePath(request.To);
+
+        if (System.IO.File.Exists(source))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            System.IO.File.Move(source, dest, true);
+        }
+        else if (Directory.Exists(source))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            Directory.Move(source, dest);
+        }
+        else
+        {
+            return NotFound();
+        }
+
+        return Ok();
+    }
+
+    [HttpPost("copy")]
+    public IActionResult Copy([FromBody] PathRequest request)
+    {
+        var source = ResolvePath(request.From);
+        var dest = ResolvePath(request.To);
+
+        if (System.IO.File.Exists(source))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            System.IO.File.Copy(source, dest, true);
+        }
+        else if (Directory.Exists(source))
+        {
+            CopyDirectory(source, dest);
+        }
+        else
+        {
+            return NotFound();
+        }
+
+        return Ok();
+    }
+
+    private static void CopyDirectory(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var targetFilePath = Path.Combine(destDir, Path.GetFileName(file));
+            System.IO.File.Copy(file, targetFilePath, true);
+        }
+
+        foreach (var directory in Directory.GetDirectories(sourceDir))
+        {
+            var targetDirPath = Path.Combine(destDir, Path.GetFileName(directory));
+            CopyDirectory(directory, targetDirPath);
+        }
+    }
+
     [HttpGet("search")]
     public IActionResult Search([FromQuery] string query)
     {
