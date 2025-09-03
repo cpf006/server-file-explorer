@@ -11,29 +11,20 @@ namespace TestProject.Controllers;
 public class FileController : ControllerBase
 {
     private readonly PathResolver _resolver;
-    private readonly ILogger<FileController> _logger;
     private readonly IFileService _fileService;
 
     // Pull the root path from options and normalize it via PathResolver.
-    public FileController(PathResolver resolver, IFileService fileService, ILogger<FileController> logger)
+    public FileController(PathResolver resolver, IFileService fileService)
     {
         _resolver = resolver;
         _fileService = fileService;
-        _logger = logger;
     }
 
     [HttpGet]
     public IActionResult Get([FromQuery] string? path)
     {
-        try
-        {
-            var result = _fileService.List(path);
-            return Ok(result);
-        }
-        catch (DirectoryNotFoundException)
-        {
-            return NotFound();
-        }
+        var result = _fileService.List(path);
+        return Ok(result);
     }
 
     [HttpGet("download")]
@@ -77,43 +68,22 @@ public class FileController : ControllerBase
     [HttpDelete]
     public IActionResult Delete([FromQuery] string path)
     {
-        try
-        {
-            _fileService.Delete(path);
-            return Ok();
-        }
-        catch (FileNotFoundException)
-        {
-            return NotFound();
-        }
+        _fileService.Delete(path);
+        return Ok();
     }
 
     [HttpPost("move")]
     public IActionResult Move([FromBody] PathRequest request)
     {
-        try
-        {
-            _fileService.Move(request.From, request.To);
-            return Ok();
-        }
-        catch (FileNotFoundException)
-        {
-            return NotFound();
-        }
+        _fileService.Move(request.From, request.To);
+        return Ok();
     }
 
     [HttpPost("copy")]
     public IActionResult Copy([FromBody] PathRequest request)
     {
-        try
-        {
-            _fileService.Copy(request.From, request.To);
-            return Ok();
-        }
-        catch (FileNotFoundException)
-        {
-            return NotFound();
-        }
+        _fileService.Copy(request.From, request.To);
+        return Ok();
     }
 
     [HttpPost("zip")]
