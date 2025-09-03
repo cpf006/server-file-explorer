@@ -17,6 +17,7 @@ namespace TestProject {
             builder.Services.AddHttpsRedirection(options => options.HttpsPort = 5001);
             builder.Services.Configure<FileExplorerOptions>(builder.Configuration.GetSection("FileExplorer"));
             builder.Services.AddSingleton<PathResolver>();
+            builder.Services.AddSingleton<IFileService, FileService>();
             builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = long.MaxValue);
 
             builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = long.MaxValue);
