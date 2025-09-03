@@ -1,49 +1,16 @@
-const apiBase = '/api/files';
-const previewApi = '/api/preview';
+import { escapeHtml } from './util.js';
+import * as api from './api.js';
+import { renderDirectoryList, renderFileList, renderSearchResults } from './ui.js';
+
 const selected = new Set();
-const previewableExt = new Set([
-    '.txt', '.json', '.xml', '.csv', '.kml', '.geojson',
-    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'
-]);
-
-function showSpinner() {
-    document.getElementById('spinner').classList.add('show');
-}
-
-function hideSpinner() {
-    document.getElementById('spinner').classList.remove('show');
-}
-
-async function apiFetch(url, options) {
-    showSpinner();
-    try {
-        const res = await fetch(url, options);
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(text || res.statusText);
-        }
-        return res;
-    } catch (err) {
-        alert('Error: ' + err.message);
-        throw err;
-    } finally {
-        hideSpinner();
-    }
-}
-
-function isPreviewable(name) {
-    const dot = name.lastIndexOf('.');
-    if (dot === -1) return false;
-    return previewableExt.has(name.substring(dot).toLowerCase());
-}
+let map;
 
 async function load() {
     const params = new URLSearchParams(window.location.search);
     const path = params.get('path') || '';
     document.getElementById('backBtn').style.display = 'none';
     try {
-        const r = await apiFetch(apiBase + '?path=' + encodeURIComponent(path));
-        const data = await r.json();
+        const data = await api.listDirectory(path);
         document.getElementById('stats').textContent =
             `Folders: ${data.stats.directoryCount}, Files: ${data.stats.fileCount}, Size: ${data.stats.totalSize} bytes`;
 
@@ -58,33 +25,8 @@ async function load() {
             list.appendChild(li);
         }
 
-        data.directories.forEach(d => {
-            const li = document.createElement('li');
-            const newPath = (path ? path + '/' : '') + d;
-            const enc = encodeURIComponent(newPath);
-            li.innerHTML = `<input type="checkbox" class="select" data-path="${enc}" /> ` +
-                `<a href="?path=${encodeURIComponent(newPath)}">${d}/</a>` +
-                ` <button onclick="deletePath('${enc}')">delete</button>` +
-                ` <button onclick="movePath('${enc}')">move</button>` +
-                ` <button onclick="copyPath('${enc}')">copy</button>`;
-            list.appendChild(li);
-        });
-
-        data.files.forEach(f => {
-            const li = document.createElement('li');
-            const filePath = (path ? path + '/' : '') + f.name;
-            const enc = encodeURIComponent(filePath);
-            let html = `<input type="checkbox" class="select" data-path="${enc}" /> ` +
-                `${f.name} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(filePath)}">download</a>`;
-            if (isPreviewable(f.name)) {
-                html += ` <button onclick="preview('${enc}')">preview</button>`;
-            }
-            html += ` <button onclick="deletePath('${enc}')">delete</button>` +
-                ` <button onclick="movePath('${enc}')">move</button>` +
-                ` <button onclick="copyPath('${enc}')">copy</button>`;
-            li.innerHTML = html;
-            list.appendChild(li);
-        });
+        renderDirectoryList(list, data.directories, path);
+        renderFileList(list, data.files, path);
 
         document.querySelectorAll('.select').forEach(cb => {
             cb.onchange = () => {
@@ -93,17 +35,20 @@ async function load() {
             };
         });
 
+        const actions = { deletePath, movePath, copyPath, preview };
+        document.querySelectorAll('button[data-action]').forEach(btn => {
+            const action = actions[btn.dataset.action];
+            if (action) {
+                btn.onclick = () => action(btn.dataset.path);
+            }
+        });
+
         document.getElementById('uploadBtn').onclick = async () => {
             const fileInput = document.getElementById('uploadFile');
             const file = fileInput.files[0];
             if (!file) return;
-            const form = new FormData();
-            form.append('file', file);
             try {
-                await apiFetch(apiBase + '/upload?path=' + encodeURIComponent(path), {
-                    method: 'POST',
-                    body: form
-                });
+                await api.uploadFile(path, file);
                 load();
             } catch (err) {
                 console.error(err);
@@ -113,8 +58,7 @@ async function load() {
         document.getElementById('searchBtn').onclick = async () => {
             const q = document.getElementById('search').value;
             try {
-                const r = await apiFetch(apiBase + '/search?query=' + encodeURIComponent(q));
-                const d = await r.json();
+                const d = await api.search(q);
                 showSearch(d);
             } catch (err) {
                 console.error(err);
@@ -126,7 +70,7 @@ async function load() {
             if (!name) return;
             const newPath = (path ? path + '/' : '') + name;
             try {
-                await apiFetch(apiBase + '/mkdir?path=' + encodeURIComponent(newPath), { method: 'POST' });
+                await api.createFolder(newPath);
                 load();
             } catch (err) {
                 console.error(err);
@@ -136,11 +80,7 @@ async function load() {
         document.getElementById('zipBtn').onclick = async () => {
             if (selected.size === 0) return;
             try {
-                const res = await apiFetch(apiBase + '/zip', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ paths: Array.from(selected) })
-                });
+                const res = await api.zipPaths(Array.from(selected));
                 const total = parseInt(res.headers.get('Content-Length')) || 0;
                 const reader = res.body.getReader();
                 let received = 0;
@@ -174,17 +114,7 @@ async function load() {
 
 function showSearch(data) {
     const list = document.getElementById('listing');
-    list.innerHTML = '';
-    data.directories.forEach(d => {
-        const li = document.createElement('li');
-        li.innerHTML = `<strong>Dir:</strong> <a href="?path=${encodeURIComponent(d.path)}">${d.path}</a>`;
-        list.appendChild(li);
-    });
-    data.files.forEach(f => {
-        const li = document.createElement('li');
-        li.innerHTML = `<strong>File:</strong> ${f.path} (${f.size} bytes) <a href="${apiBase}/download?path=${encodeURIComponent(f.path)}">download</a>`;
-        list.appendChild(li);
-    });
+    renderSearchResults(list, data);
     document.getElementById('stats').textContent = 'Search results';
     const back = document.getElementById('backBtn');
     back.style.display = 'inline';
@@ -198,23 +128,19 @@ async function deletePath(p) {
     const path = decodeURIComponent(p);
     if (!confirm('Delete ' + path + '?')) return;
     try {
-        await apiFetch(apiBase + '?path=' + encodeURIComponent(path), { method: 'DELETE' });
+        await api.deletePath(path);
         load();
     } catch (err) {
         console.error(err);
     }
 }
 
-async function promptAndPost(p, url, message) {
+async function promptAndPost(p, fn, message) {
     const path = decodeURIComponent(p);
     const dest = prompt(message, path);
     if (!dest) return;
     try {
-        await apiFetch(apiBase + url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ from: path, to: dest })
-        });
+        await fn(path, dest);
         load();
     } catch (err) {
         console.error(err);
@@ -222,19 +148,17 @@ async function promptAndPost(p, url, message) {
 }
 
 function movePath(p) {
-    promptAndPost(p, '/move', 'Move to:');
+    promptAndPost(p, api.movePath, 'Move to:');
 }
 
 function copyPath(p) {
-    promptAndPost(p, '/copy', 'Copy to:');
+    promptAndPost(p, api.copyPath, 'Copy to:');
 }
-
-let map;
 
 async function preview(p) {
     const path = decodeURIComponent(p);
     try {
-        const r = await apiFetch(previewApi + '?path=' + encodeURIComponent(path));
+        const r = await api.preview(path);
         const dlg = document.getElementById('previewDialog');
         const container = document.getElementById('previewContainer');
         const ct = r.headers.get('Content-Type') || '';
@@ -265,10 +189,6 @@ async function preview(p) {
     } catch (err) {
         console.error(err);
     }
-}
-
-function escapeHtml(str) {
-    return str.replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 document.getElementById('closePreview').onclick = () => {
