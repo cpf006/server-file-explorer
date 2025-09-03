@@ -49,8 +49,10 @@ public class FileControllerTests : IAsyncLifetime
         Assert.NotNull(result);
         Assert.Contains("sub", result!.Directories);
         Assert.Contains(result.Files, f => f.Name == "root.txt");
+        Assert.Contains(result.Files, f => f.Name == "point.geojson");
+        Assert.Contains(result.Files, f => f.Name == "point.kml");
         Assert.Equal(1, result.Stats.DirectoryCount);
-        Assert.Equal(1, result.Stats.FileCount);
+        Assert.Equal(3, result.Stats.FileCount);
     }
 
     [Fact]
