@@ -57,6 +57,35 @@ public class FileControllerTests : IAsyncLifetime
         Assert.Contains(result!.Files, f => f.Path.EndsWith("sub/a.txt"));
     }
 
+    [Fact]
+    public async Task Delete_RemovesFile()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.DeleteAsync("/api/files?path=root.txt");
+        response.EnsureSuccessStatusCode();
+        Assert.False(System.IO.File.Exists(Path.Combine(_rootDir, "root.txt")));
+    }
+
+    [Fact]
+    public async Task Move_RenamesFile()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/files/move", new { from = "sub/a.txt", to = "sub/b.txt" });
+        response.EnsureSuccessStatusCode();
+        Assert.True(System.IO.File.Exists(Path.Combine(_rootDir, "sub", "b.txt")));
+        Assert.False(System.IO.File.Exists(Path.Combine(_rootDir, "sub", "a.txt")));
+    }
+
+    [Fact]
+    public async Task Copy_DuplicatesDirectory()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/files/copy", new { from = "sub", to = "sub_copy" });
+        response.EnsureSuccessStatusCode();
+        Assert.True(Directory.Exists(Path.Combine(_rootDir, "sub_copy")));
+        Assert.True(System.IO.File.Exists(Path.Combine(_rootDir, "sub_copy", "a.txt")));
+    }
+
     private class ListResponse
     {
         public string[] Directories { get; set; } = Array.Empty<string>();
