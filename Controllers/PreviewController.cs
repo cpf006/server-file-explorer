@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.StaticFiles;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Xml.Linq;
+using TestProject.Services;
 
 namespace TestProject.Controllers;
 
@@ -12,26 +12,18 @@ namespace TestProject.Controllers;
 [Route("api/preview")]
 public class PreviewController : ControllerBase
 {
-    private readonly string _root;
+    private readonly PathResolver _resolver;
     private readonly FileExtensionContentTypeProvider _contentTypeProvider = new();
 
-    public PreviewController(IOptions<FileExplorerOptions> options)
+    public PreviewController(PathResolver resolver)
     {
-        _root = Path.GetFullPath(options.Value.RootPath ?? Directory.GetCurrentDirectory());
-    }
-
-    private string ResolvePath(string relative)
-    {
-        var combined = Path.GetFullPath(Path.Combine(_root, relative ?? string.Empty));
-        if (!combined.StartsWith(_root))
-            throw new InvalidOperationException("Invalid path");
-        return combined;
+        _resolver = resolver;
     }
 
     [HttpGet]
     public IActionResult Get([FromQuery] string path)
     {
-        var full = ResolvePath(path);
+        var full = _resolver.ResolvePath(path);
         if (!System.IO.File.Exists(full))
             return NotFound();
 
