@@ -1,4 +1,5 @@
 using System.IO;
+using Microsoft.AspNetCore.Http.Features;
 
 namespace TestProject {
     public class Program {
@@ -14,6 +15,9 @@ namespace TestProject {
             builder.Services.AddControllers();
             builder.Services.AddHttpsRedirection(options => options.HttpsPort = 5001);
             builder.Services.Configure<FileExplorerOptions>(builder.Configuration.GetSection("FileExplorer"));
+            builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = long.MaxValue);
+
+            builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = long.MaxValue);
 
             var app = builder.Build();
 
