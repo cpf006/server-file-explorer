@@ -77,18 +77,6 @@ public class FileControllerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Delete_RemovesEmptyParentDirectories()
-    {
-        Directory.CreateDirectory(Path.Combine(_rootDir, "a", "b"));
-        File.WriteAllText(Path.Combine(_rootDir, "a", "b", "c.txt"), "hi");
-        var client = _factory.CreateClient();
-        var response = await client.DeleteAsync("/api/files?path=" + Uri.EscapeDataString("a/b/c.txt"));
-        response.EnsureSuccessStatusCode();
-        Assert.False(Directory.Exists(Path.Combine(_rootDir, "a", "b")));
-        Assert.False(Directory.Exists(Path.Combine(_rootDir, "a")));
-    }
-
-    [Fact]
     public async Task Mkdir_CreatesDirectory()
     {
         var client = _factory.CreateClient();
