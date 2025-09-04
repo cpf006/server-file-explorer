@@ -27,13 +27,13 @@ public class PathResolverTests : IDisposable
     [Theory]
     [InlineData("../outside.txt")]
     [InlineData("sub/../../outside.txt")]
-    public void Resolve_DetectsTraversal(string input)
+    public void ResolveDetectsTraversal(string input)
     {
         Assert.Throws<InvalidOperationException>(() => _resolver.Resolve(input));
     }
 
     [Fact]
-    public void Resolve_DetectsAbsoluteEscape()
+    public void ResolveDetectsAbsoluteEscape()
     {
         var outside = Path.GetFullPath(Path.Combine(_root, "..", "outside.txt"));
         Assert.Throws<InvalidOperationException>(() => _resolver.Resolve(outside));
