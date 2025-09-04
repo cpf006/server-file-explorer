@@ -6,7 +6,9 @@ const selected = new Set();
 let map;
 
 async function load(p) {
-    const path = p !== undefined ? p : (new URLSearchParams(window.location.search).get('path') || '');
+    const path = typeof p === 'string'
+        ? p
+        : (new URLSearchParams(window.location.search).get('path') || '');
     document.getElementById('backBtn').style.display = 'none';
     try {
         const data = await api.listDirectory(path);
@@ -208,7 +210,7 @@ document.getElementById('closePreview').onclick = () => {
         map = null;
     }
 };
-window.onload = load;
+window.addEventListener('load', () => load());
 window.onpopstate = () => {
     const params = new URLSearchParams(location.search);
     const path = params.get('path') || '';
