@@ -17,7 +17,8 @@ public class PathResolver
     {
         relative ??= string.Empty;
         var combined = Path.GetFullPath(Path.Combine(_root, relative));
-        if (!combined.StartsWith(_root))
+        var relativePath = Path.GetRelativePath(_root, combined);
+        if (relativePath.StartsWith("..", StringComparison.Ordinal) || !combined.StartsWith(_root, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Invalid path");
         return combined;
     }
