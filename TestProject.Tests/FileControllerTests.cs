@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 using System.Net.Http.Headers;
+using Microsoft.Extensions.DependencyInjection;
+using TestProject.Services;
 
 namespace TestProject.Tests;
 
@@ -30,6 +32,7 @@ public class FileControllerTests : IAsyncLifetime
 
         Environment.SetEnvironmentVariable("FileExplorer__RootPath", _rootDir);
         _factory = new WebApplicationFactory<Program>();
+        _ = _factory.Services.GetRequiredService<PathResolver>();
     }
 
     public Task InitializeAsync() => Task.CompletedTask;

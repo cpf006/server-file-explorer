@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
+using TestProject.Services;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -12,17 +12,19 @@ namespace TestProject.Controllers;
 [Route("api/files")]
 public class FileController : ControllerBase
 {
+    private readonly PathResolver _pathResolver;
     private readonly string _root;
 
-    public FileController(IOptions<FileExplorerOptions> options)
+    public FileController(PathResolver pathResolver)
     {
-        _root = Path.GetFullPath(options.Value.RootPath ?? Directory.GetCurrentDirectory());
+        _pathResolver = pathResolver;
+        _root = _pathResolver.Resolve(null);
     }
 
     [HttpGet]
     public IActionResult Get([FromQuery] string? path)
     {
-        var full = ResolvePath(path);
+        var full = _pathResolver.Resolve(path);
         if (!Directory.Exists(full))
             return NotFound();
         var directory = new DirectoryInfo(full);
@@ -36,7 +38,7 @@ public class FileController : ControllerBase
     [HttpGet("download")]
     public IActionResult Download([FromQuery] string path)
     {
-        var full = ResolvePath(path);
+        var full = _pathResolver.Resolve(path);
         if (!System.IO.File.Exists(full))
             return NotFound();
         var fileName = Path.GetFileName(full);
@@ -51,7 +53,7 @@ public class FileController : ControllerBase
         if (file == null || file.Length == 0)
             return BadRequest("No file supplied");
 
-        var folder = ResolvePath(path);
+        var folder = _pathResolver.Resolve(path);
         if (!Directory.Exists(folder))
             return NotFound();
 
@@ -64,7 +66,7 @@ public class FileController : ControllerBase
     [HttpPost("mkdir")]
     public IActionResult CreateDirectory([FromQuery] string path)
     {
-        var full = ResolvePath(path);
+        var full = _pathResolver.Resolve(path);
         if (System.IO.File.Exists(full))
             return Conflict();
         Directory.CreateDirectory(full);
@@ -74,7 +76,7 @@ public class FileController : ControllerBase
     [HttpDelete]
     public IActionResult Delete([FromQuery] string path)
     {
-        var full = ResolvePath(path);
+        var full = _pathResolver.Resolve(path);
         if (System.IO.File.Exists(full))
             System.IO.File.Delete(full);
         else if (Directory.Exists(full))
@@ -126,7 +128,7 @@ public class FileController : ControllerBase
         {
             foreach (var relative in request.Paths)
             {
-                var full = ResolvePath(relative);
+                var full = _pathResolver.Resolve(relative);
                 await AddToArchive(archive, full);
             }
         }
@@ -146,19 +148,10 @@ public class FileController : ControllerBase
         return Ok(new SearchResult(files, directories));
     }
 
-    private string ResolvePath(string? relative)
-    {
-        relative ??= string.Empty;
-        var combined = Path.GetFullPath(Path.Combine(_root, relative));
-        if (!combined.StartsWith(_root))
-            throw new InvalidOperationException("Invalid path");
-        return combined;
-    }
-
     private void ProcessPath(string from, string to, Action<string, string> fileAction, Action<string, string> dirAction)
     {
-        var source = ResolvePath(from);
-        var dest = ResolvePath(to);
+        var source = _pathResolver.Resolve(from);
+        var dest = _pathResolver.Resolve(to);
         if (System.IO.File.Exists(source))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
