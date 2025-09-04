@@ -46,7 +46,7 @@ public class FileControllerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ListRoot_ReturnsDirectoriesAndFiles()
+    public async Task ListRootReturnsDirectoriesAndFiles()
     {
         var client = _factory.CreateClient();
         var result = await client.GetFromJsonAsync<ListResponse>("/api/files");
@@ -61,7 +61,7 @@ public class FileControllerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Search_ReturnsMatches()
+    public async Task SearchReturnsMatches()
     {
         var client = _factory.CreateClient();
         var result = await client.GetFromJsonAsync<SearchResponse>("/api/files/search?query=a.txt");
@@ -71,7 +71,7 @@ public class FileControllerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Delete_RemovesFile()
+    public async Task DeleteRemovesFile()
     {
         var client = _factory.CreateClient();
         var response = await client.DeleteAsync("/api/files?path=root.txt");
@@ -80,7 +80,7 @@ public class FileControllerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Mkdir_CreatesDirectory()
+    public async Task MkdirCreatesDirectory()
     {
         var client = _factory.CreateClient();
         var response = await client.PostAsync("/api/files/mkdir?path=newdir", null);
@@ -89,7 +89,7 @@ public class FileControllerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Move_RenamesFile()
+    public async Task MoveRenamesFile()
     {
         var client = _factory.CreateClient();
         var response = await client.PostAsJsonAsync("/api/files/move", new { from = "sub/a.txt", to = "sub/b.txt" });
@@ -99,7 +99,7 @@ public class FileControllerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Copy_DuplicatesDirectory()
+    public async Task CopyDuplicatesDirectory()
     {
         var client = _factory.CreateClient();
         var response = await client.PostAsJsonAsync("/api/files/copy", new { from = "sub", to = "sub_copy" });
@@ -109,7 +109,7 @@ public class FileControllerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Upload_AllowsLargeFiles()
+    public async Task UploadAllowsLargeFiles()
     {
         var client = _factory.CreateClient();
         var content = new MultipartFormDataContent();
@@ -123,7 +123,7 @@ public class FileControllerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Zip_ReturnsArchive()
+    public async Task ZipReturnsArchive()
     {
         var client = _factory.CreateClient();
         var response = await client.PostAsJsonAsync("/api/files/zip", new { paths = new[] { "root.txt", "sub" } });
@@ -135,7 +135,7 @@ public class FileControllerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Preview_ReturnsFileContent()
+    public async Task PreviewReturnsFileContent()
     {
         var client = _factory.CreateClient();
         var text = await client.GetStringAsync("/api/preview?path=root.txt");
@@ -143,7 +143,7 @@ public class FileControllerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Preview_ConvertsKmlToGeoJson()
+    public async Task PreviewConvertsKmlToGeoJson()
     {
         var client = _factory.CreateClient();
         var json = await client.GetStringAsync("/api/preview?path=point.kml");
