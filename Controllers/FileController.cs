@@ -3,6 +3,7 @@ using TestProject.Services;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Collections.Generic;
 using TestProject.Models;
 
 namespace TestProject.Controllers;
@@ -139,12 +140,26 @@ public class FileController : ControllerBase
     [HttpGet("search")]
     public IActionResult Search([FromQuery] string query)
     {
-        var files = Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories)
-            .Where(p => Path.GetFileName(p).Contains(query, StringComparison.OrdinalIgnoreCase))
-            .Select(p => new FoundFile(Path.GetRelativePath(_root, p), new FileInfo(p).Length));
-        var directories = Directory.EnumerateDirectories(_root, "*", SearchOption.AllDirectories)
-            .Where(p => Path.GetFileName(p).Contains(query, StringComparison.OrdinalIgnoreCase))
-            .Select(p => new FoundDirectory(Path.GetRelativePath(_root, p)));
+        var files = new List<FoundFile>();
+        var directories = new List<FoundDirectory>();
+
+        foreach (var path in Directory.EnumerateFileSystemEntries(_root, "*", SearchOption.AllDirectories))
+        {
+            var name = Path.GetFileName(path);
+            if (!name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var attributes = System.IO.File.GetAttributes(path);
+            if ((attributes & FileAttributes.Directory) == FileAttributes.Directory)
+            {
+                directories.Add(new FoundDirectory(Path.GetRelativePath(_root, path)));
+            }
+            else
+            {
+                files.Add(new FoundFile(Path.GetRelativePath(_root, path), new FileInfo(path).Length));
+            }
+        }
+
         return Ok(new SearchResult(files, directories));
     }
 

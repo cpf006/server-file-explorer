@@ -65,10 +65,14 @@ public class FileControllerTests : IAsyncLifetime
     public async Task SearchReturnsMatches()
     {
         var client = _factory.CreateClient();
-        var result = await client.GetFromJsonAsync<SearchResult>("/api/files/search?query=a.txt");
 
-        Assert.NotNull(result);
-        Assert.Contains(result!.Files, f => f.Path.EndsWith("sub/a.txt"));
+        var fileResult = await client.GetFromJsonAsync<SearchResult>("/api/files/search?query=a.txt");
+        Assert.NotNull(fileResult);
+        Assert.Contains(fileResult!.Files, f => f.Path.EndsWith("sub/a.txt"));
+
+        var dirResult = await client.GetFromJsonAsync<SearchResult>("/api/files/search?query=sub");
+        Assert.NotNull(dirResult);
+        Assert.Contains(dirResult!.Directories, d => d.Path == "sub");
     }
 
     [Fact]
