@@ -5,9 +5,8 @@ import { renderDirectoryList, renderFileList, renderSearchResults } from './ui.j
 const selected = new Set();
 let map;
 
-async function load() {
-    const params = new URLSearchParams(window.location.search);
-    const path = params.get('path') || '';
+async function load(p) {
+    const path = p !== undefined ? p : (new URLSearchParams(window.location.search).get('path') || '');
     document.getElementById('backBtn').style.display = 'none';
     try {
         const data = await api.listDirectory(path);
@@ -21,11 +20,14 @@ async function load() {
         if (path) {
             const parent = path.split('/').slice(0, -1).join('/');
             const li = document.createElement('li');
-            li.innerHTML = `<a href="?path=${encodeURIComponent(parent)}">..</a>`;
+            const btn = document.createElement('button');
+            btn.textContent = '..';
+            btn.onclick = () => navigateTo(parent);
+            li.appendChild(btn);
             list.appendChild(li);
         }
 
-        renderDirectoryList(list, data.directories, path);
+        renderDirectoryList(list, data.directories, path, navigateTo);
         renderFileList(list, data.files, path);
 
         document.querySelectorAll('.select').forEach(cb => {
@@ -49,7 +51,7 @@ async function load() {
             if (!file) return;
             try {
                 await api.uploadFile(path, file);
-                load();
+                load(path);
             } catch (err) {
                 console.error(err);
             }
@@ -71,7 +73,7 @@ async function load() {
             const newPath = (path ? path + '/' : '') + name;
             try {
                 await api.createFolder(newPath);
-                load();
+                load(path);
             } catch (err) {
                 console.error(err);
             }
@@ -114,7 +116,7 @@ async function load() {
 
 function showSearch(data) {
     const list = document.getElementById('listing');
-    renderSearchResults(list, data);
+    renderSearchResults(list, data, navigateTo);
     document.getElementById('stats').textContent = 'Search results';
     const back = document.getElementById('backBtn');
     back.style.display = 'inline';
@@ -191,6 +193,12 @@ async function preview(p) {
     }
 }
 
+function navigateTo(path) {
+    const url = path ? `?path=${encodeURIComponent(path)}` : location.pathname;
+    history.pushState({}, '', url);
+    load(path);
+}
+
 document.getElementById('closePreview').onclick = () => {
     document.getElementById('previewDialog').close();
     const container = document.getElementById('previewContainer');
@@ -200,5 +208,9 @@ document.getElementById('closePreview').onclick = () => {
         map = null;
     }
 };
-
 window.onload = load;
+window.onpopstate = () => {
+    const params = new URLSearchParams(location.search);
+    const path = params.get('path') || '';
+    load(path);
+};
