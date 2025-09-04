@@ -3,16 +3,18 @@ const previewableExt = new Set([
     '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'
 ]);
 
-export function renderDirectoryList(list, directories, path) {
+export function renderDirectoryList(list, directories, path, navigate) {
     directories.forEach(d => {
         const li = document.createElement('li');
         const newPath = (path ? path + '/' : '') + d;
         const enc = encodeURIComponent(newPath);
         li.innerHTML = `<input type="checkbox" class="select" data-path="${enc}" /> ` +
-            `<a href="?path=${encodeURIComponent(newPath)}">${d}/</a>` +
+            `<button class="navigate" data-path="${enc}">${d}/</button>` +
             ` <button data-action="deletePath" data-path="${enc}">delete</button>` +
             ` <button data-action="movePath" data-path="${enc}">move</button>` +
             ` <button data-action="copyPath" data-path="${enc}">copy</button>`;
+        const nav = li.querySelector('.navigate');
+        nav.onclick = () => navigate(newPath);
         list.appendChild(li);
     });
 }
@@ -41,11 +43,13 @@ export function renderFileList(list, files, path) {
     });
 }
 
-export function renderSearchResults(list, data) {
+export function renderSearchResults(list, data, navigate) {
     list.innerHTML = '';
     data.directories.forEach(d => {
         const li = document.createElement('li');
-        li.innerHTML = `<strong>Dir:</strong> <a href="?path=${encodeURIComponent(d.path)}">${d.path}</a>`;
+        const enc = encodeURIComponent(d.path);
+        li.innerHTML = `<strong>Dir:</strong> <button class="navigate" data-path="${enc}">${d.path}</button>`;
+        li.querySelector('.navigate').onclick = () => navigate(d.path);
         list.appendChild(li);
     });
     data.files.forEach(f => {
