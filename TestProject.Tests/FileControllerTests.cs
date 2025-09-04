@@ -10,6 +10,7 @@ using Xunit;
 using System.Net.Http.Headers;
 using Microsoft.Extensions.DependencyInjection;
 using TestProject.Services;
+using TestProject.Models;
 
 namespace TestProject.Tests;
 
@@ -49,7 +50,7 @@ public class FileControllerTests : IAsyncLifetime
     public async Task ListRootReturnsDirectoriesAndFiles()
     {
         var client = _factory.CreateClient();
-        var result = await client.GetFromJsonAsync<ListResponse>("/api/files");
+        var result = await client.GetFromJsonAsync<DirectoryListing>("/api/files");
 
         Assert.NotNull(result);
         Assert.Contains("sub", result!.Directories);
@@ -64,7 +65,7 @@ public class FileControllerTests : IAsyncLifetime
     public async Task SearchReturnsMatches()
     {
         var client = _factory.CreateClient();
-        var result = await client.GetFromJsonAsync<SearchResponse>("/api/files/search?query=a.txt");
+        var result = await client.GetFromJsonAsync<SearchResult>("/api/files/search?query=a.txt");
 
         Assert.NotNull(result);
         Assert.Contains(result!.Files, f => f.Path.EndsWith("sub/a.txt"));
@@ -154,41 +155,5 @@ public class FileControllerTests : IAsyncLifetime
         Assert.Equal(2.0, coords[1].GetDouble());
     }
 
-    private class ListResponse
-    {
-        public string[] Directories { get; set; } = Array.Empty<string>();
-        public FileItem[] Files { get; set; } = Array.Empty<FileItem>();
-        public Stats Stats { get; set; } = new();
-    }
-
-    private class FileItem
-    {
-        public string Name { get; set; } = string.Empty;
-        public long Size { get; set; }
-    }
-
-    private class Stats
-    {
-        public int DirectoryCount { get; set; }
-        public int FileCount { get; set; }
-        public long TotalSize { get; set; }
-    }
-
-    private class SearchResponse
-    {
-        public FoundDirectory[] Directories { get; set; } = Array.Empty<FoundDirectory>();
-        public FoundFile[] Files { get; set; } = Array.Empty<FoundFile>();
-    }
-
-    private class FoundDirectory
-    {
-        public string Path { get; set; } = string.Empty;
-    }
-
-    private class FoundFile
-    {
-        public string Path { get; set; } = string.Empty;
-        public long Size { get; set; }
-    }
 }
 
