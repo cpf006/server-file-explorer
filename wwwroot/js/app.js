@@ -1,72 +1,95 @@
-import { escapeHtml } from './util.js';
 import * as api from './api.js';
 import { renderDirectoryList, renderFileList, renderSearchResults } from './ui.js';
+import { showPreview, closePreview } from './preview.js';
+import { downloadZip } from './zip.js';
 
-const selected = new Set();
-let map;
+class FileExplorer {
+    constructor() {
+        this.selected = new Set();
+        this.currentPath = '';
+    }
 
-async function load(p) {
-    const path = typeof p === 'string'
-        ? p
-        : (new URLSearchParams(window.location.search).get('path') || '');
-    const list = document.getElementById('listing');
-    list.innerHTML = '<li class="skeleton"></li>';
-    document.getElementById('stats').textContent = '';
-    document.getElementById('backBtn').style.display = 'none';
+    async fetchDirectory(pathInput) {
+        const path = typeof pathInput === 'string'
+            ? pathInput
+            : (new URLSearchParams(window.location.search).get('path') || '');
+        this.currentPath = path;
+        const listElement = document.getElementById('listing');
+        listElement.innerHTML = '<li class="skeleton"></li>';
+        document.getElementById('stats').textContent = '';
+        document.getElementById('backBtn').style.display = 'none';
+        try {
+            const data = await api.listDirectory(path);
+            document.getElementById('stats').textContent =
+                `Folders: ${data.stats.directoryCount}, Files: ${data.stats.fileCount}, Size: ${data.stats.totalSize} bytes`;
+            this.renderListing(data, path);
+            this.bindListingEvents();
+        } catch (err) {
+            console.error(err);
+        }
+    }
 
-    try {
-        const data = await api.listDirectory(path);
-        document.getElementById('stats').textContent =
-            `Folders: ${data.stats.directoryCount}, Files: ${data.stats.fileCount}, Size: ${data.stats.totalSize} bytes`;
-
-        list.innerHTML = '';
-        selected.clear();
-
+    renderListing(data, path) {
+        const listElement = document.getElementById('listing');
+        listElement.innerHTML = '';
+        this.selected.clear();
         if (path) {
             const parent = path.split('/').slice(0, -1).join('/');
-            const li = document.createElement('li');
-            const btn = document.createElement('button');
-            btn.textContent = '..';
-            btn.onclick = () => navigateTo(parent);
-            li.appendChild(btn);
-            list.appendChild(li);
+            const listItem = document.createElement('li');
+            const button = document.createElement('button');
+            button.textContent = '..';
+            button.onclick = () => this.navigateTo(parent);
+            listItem.appendChild(button);
+            listElement.appendChild(listItem);
         }
+        renderDirectoryList(listElement, data.directories, path, childPath => this.navigateTo(childPath));
+        renderFileList(listElement, data.files, path);
+    }
 
-        renderDirectoryList(list, data.directories, path, navigateTo);
-        renderFileList(list, data.files, path);
-
-        document.querySelectorAll('.select').forEach(cb => {
-            cb.onchange = () => {
-                const p = decodeURIComponent(cb.dataset.path);
-                if (cb.checked) selected.add(p); else selected.delete(p);
+    bindListingEvents() {
+        document.querySelectorAll('.select').forEach(checkbox => {
+            checkbox.onchange = () => {
+                const path = decodeURIComponent(checkbox.dataset.path);
+                if (checkbox.checked) {
+                    this.selected.add(path);
+                } else {
+                    this.selected.delete(path);
+                }
             };
         });
 
-        const actions = { deletePath, movePath, copyPath, preview };
-        document.querySelectorAll('button[data-action]').forEach(btn => {
-            const action = actions[btn.dataset.action];
+        const actions = {
+            deletePath: path => this.deletePath(path),
+            movePath: path => this.movePath(path),
+            copyPath: path => this.copyPath(path),
+            preview: path => showPreview(decodeURIComponent(path))
+        };
+        document.querySelectorAll('button[data-action]').forEach(button => {
+            const action = actions[button.dataset.action];
             if (action) {
-                btn.onclick = () => action(btn.dataset.path);
+                button.onclick = () => action(button.dataset.path);
             }
         });
+    }
 
+    bindGlobalEvents() {
         document.getElementById('uploadBtn').onclick = async () => {
             const fileInput = document.getElementById('uploadFile');
             const file = fileInput.files[0];
             if (!file) return;
             try {
-                await api.uploadFile(path, file);
-                load(path);
+                await api.uploadFile(this.currentPath, file);
+                this.fetchDirectory(this.currentPath);
             } catch (err) {
                 console.error(err);
             }
         };
 
         document.getElementById('searchBtn').onclick = async () => {
-            const q = document.getElementById('search').value;
+            const query = document.getElementById('search').value;
             try {
-                const d = await api.search(q);
-                showSearch(d);
+                const results = await api.search(query);
+                this.showSearch(results);
             } catch (err) {
                 console.error(err);
             }
@@ -75,147 +98,89 @@ async function load(p) {
         document.getElementById('createFolderBtn').onclick = async () => {
             const name = prompt('Folder name:');
             if (!name) return;
-            const newPath = (path ? path + '/' : '') + name;
+            const newPath = (this.currentPath ? this.currentPath + '/' : '') + name;
             try {
                 await api.createFolder(newPath);
-                load(path);
+                this.fetchDirectory(this.currentPath);
             } catch (err) {
                 console.error(err);
             }
         };
 
         document.getElementById('zipBtn').onclick = async () => {
-            if (selected.size === 0) return;
+            if (this.selected.size === 0) return;
             try {
-                const res = await api.zipPaths(Array.from(selected));
-                const total = parseInt(res.headers.get('Content-Length')) || 0;
-                const reader = res.body.getReader();
-                let received = 0;
-                const chunks = [];
-                const progress = document.getElementById('progress');
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    chunks.push(value);
-                    received += value.length;
-                    if (total) progress.textContent = `Downloading... ${(received / total * 100).toFixed(1)}%`;
-                }
-                progress.textContent = '';
-                const blob = new Blob(chunks, { type: 'application/zip' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'files.zip';
-                a.click();
-                URL.revokeObjectURL(url);
-                selected.clear();
-                document.querySelectorAll('.select').forEach(cb => cb.checked = false);
+                await downloadZip(Array.from(this.selected), document.getElementById('progress'));
+                this.selected.clear();
+                document.querySelectorAll('.select').forEach(checkbox => (checkbox.checked = false));
             } catch (err) {
                 console.error(err);
             }
         };
-    } catch (err) {
-        console.error(err);
+
+        document.getElementById('closePreview').onclick = closePreview;
     }
-}
 
-function showSearch(data) {
-    const list = document.getElementById('listing');
-    renderSearchResults(list, data, navigateTo);
-    document.getElementById('stats').textContent = 'Search results';
-    const back = document.getElementById('backBtn');
-    back.style.display = 'inline';
-    back.onclick = () => {
-        document.getElementById('search').value = '';
-        load();
-    };
-}
-
-async function deletePath(p) {
-    const path = decodeURIComponent(p);
-    if (!confirm('Delete ' + path + '?')) return;
-    try {
-        await api.deletePath(path);
-        load();
-    } catch (err) {
-        console.error(err);
+    showSearch(data) {
+        const listElement = document.getElementById('listing');
+        renderSearchResults(listElement, data, path => this.navigateTo(path));
+        document.getElementById('stats').textContent = 'Search results';
+        const backButton = document.getElementById('backBtn');
+        backButton.style.display = 'inline';
+        backButton.onclick = () => {
+            document.getElementById('search').value = '';
+            this.fetchDirectory(this.currentPath);
+        };
     }
-}
 
-async function promptAndPost(p, fn, message) {
-    const path = decodeURIComponent(p);
-    const dest = prompt(message, path);
-    if (!dest) return;
-    try {
-        await fn(path, dest);
-        load();
-    } catch (err) {
-        console.error(err);
-    }
-}
-
-function movePath(p) {
-    promptAndPost(p, api.movePath, 'Move to:');
-}
-
-function copyPath(p) {
-    promptAndPost(p, api.copyPath, 'Copy to:');
-}
-
-async function preview(p) {
-    const path = decodeURIComponent(p);
-    try {
-        const r = await api.preview(path);
-        const dlg = document.getElementById('previewDialog');
-        const container = document.getElementById('previewContainer');
-        const ct = r.headers.get('Content-Type') || '';
-        dlg.showModal();
-        if (ct.includes('application/geo+json')) {
-            const data = await r.json();
-            container.innerHTML = '<div id="map" style="width:100%;height:100%;"></div>';
-            if (map) {
-                map.remove();
-            }
-            map = L.map('map');
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
-            const layer = L.geoJSON(data).addTo(map);
-            const bounds = layer.getBounds();
-            if (bounds.isValid()) {
-                map.fitBounds(bounds);
-            }
-        } else if (ct.startsWith('image/')) {
-            const blob = await r.blob();
-            const url = URL.createObjectURL(blob);
-            container.innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;" />`;
-        } else {
-            const text = await r.text();
-            container.innerHTML = `<pre style="white-space:pre-wrap;">${escapeHtml(text)}</pre>`;
+    async deletePath(encodedPath) {
+        const path = decodeURIComponent(encodedPath);
+        if (!confirm('Delete ' + path + '?')) return;
+        try {
+            await api.deletePath(path);
+            this.fetchDirectory(this.currentPath);
+        } catch (err) {
+            console.error(err);
         }
-    } catch (err) {
-        console.error(err);
+    }
+
+    async promptAndPost(encodedPath, apiFn, message) {
+        const path = decodeURIComponent(encodedPath);
+        const destination = prompt(message, path);
+        if (!destination) return;
+        try {
+            await apiFn(path, destination);
+            this.fetchDirectory(this.currentPath);
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    movePath(encodedPath) {
+        this.promptAndPost(encodedPath, api.movePath, 'Move to:');
+    }
+
+    copyPath(encodedPath) {
+        this.promptAndPost(encodedPath, api.copyPath, 'Copy to:');
+    }
+
+    navigateTo(path) {
+        const url = path ? `?path=${encodeURIComponent(path)}` : location.pathname;
+        history.pushState({}, '', url);
+        this.fetchDirectory(path);
     }
 }
 
-function navigateTo(path) {
-    const url = path ? `?path=${encodeURIComponent(path)}` : location.pathname;
-    history.pushState({}, '', url);
-    load(path);
-}
+const explorer = new FileExplorer();
 
-document.getElementById('closePreview').onclick = () => {
-    document.getElementById('previewDialog').close();
-    const container = document.getElementById('previewContainer');
-    container.innerHTML = '';
-    if (map) {
-        map.remove();
-        map = null;
-    }
-};
-window.addEventListener('load', () => load());
+window.addEventListener('load', () => {
+    explorer.bindGlobalEvents();
+    explorer.fetchDirectory();
+});
+
 window.onpopstate = () => {
     const params = new URLSearchParams(location.search);
     const path = params.get('path') || '';
-    load(path);
+    explorer.fetchDirectory(path);
 };
+
