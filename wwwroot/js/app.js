@@ -9,13 +9,15 @@ async function load(p) {
     const path = typeof p === 'string'
         ? p
         : (new URLSearchParams(window.location.search).get('path') || '');
+    const list = document.getElementById('listing');
+    list.innerHTML = '<li class="skeleton"></li><li class="skeleton"></li><li class="skeleton"></li>';
+    document.getElementById('stats').textContent = '';
     document.getElementById('backBtn').style.display = 'none';
     try {
         const data = await api.listDirectory(path);
         document.getElementById('stats').textContent =
             `Folders: ${data.stats.directoryCount}, Files: ${data.stats.fileCount}, Size: ${data.stats.totalSize} bytes`;
 
-        const list = document.getElementById('listing');
         list.innerHTML = '';
         selected.clear();
 
