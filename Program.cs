@@ -1,7 +1,5 @@
 using System.IO;
 using Microsoft.AspNetCore.Http.Features;
-using TestProject.Filters;
-using TestProject.Services;
 
 namespace TestProject {
     public class Program {
@@ -14,14 +12,9 @@ namespace TestProject {
                 File.WriteAllText(Path.Combine(defaultRoot, "readme.txt"), "Drop files here.");
             }
 
-            builder.Services.AddControllers(options =>
-            {
-                options.Filters.Add<NotFoundExceptionFilter>();
-            });
+            builder.Services.AddControllers();
             builder.Services.AddHttpsRedirection(options => options.HttpsPort = 5001);
             builder.Services.Configure<FileExplorerOptions>(builder.Configuration.GetSection("FileExplorer"));
-            builder.Services.AddSingleton<PathResolver>();
-            builder.Services.AddSingleton<IFileService, FileService>();
             builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = long.MaxValue);
 
             builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = long.MaxValue);

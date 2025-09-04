@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using TestProject.Models;
-using TestProject.Services;
 
 namespace TestProject.Controllers;
 
@@ -10,27 +12,31 @@ namespace TestProject.Controllers;
 [Route("api/files")]
 public class FileController : ControllerBase
 {
-    private readonly PathResolver _resolver;
-    private readonly IFileService _fileService;
+    private readonly string _root;
 
-    // Pull the root path from options and normalize it via PathResolver.
-    public FileController(PathResolver resolver, IFileService fileService)
+    public FileController(IOptions<FileExplorerOptions> options)
     {
-        _resolver = resolver;
-        _fileService = fileService;
+        _root = Path.GetFullPath(options.Value.RootPath ?? Directory.GetCurrentDirectory());
     }
 
     [HttpGet]
     public IActionResult Get([FromQuery] string? path)
     {
-        var result = _fileService.List(path);
+        var full = ResolvePath(path);
+        if (!Directory.Exists(full))
+            return NotFound();
+        var directory = new DirectoryInfo(full);
+        var directories = directory.GetDirectories().Select(d => d.Name).ToList();
+        var files = directory.GetFiles().Select(f => new FileItem(f.Name, f.Length)).ToList();
+        var stats = new Stats(directories.Count, files.Count, files.Sum(f => f.Size));
+        var result = new DirectoryListing(path ?? string.Empty, directories, files, stats);
         return Ok(result);
     }
 
     [HttpGet("download")]
     public IActionResult Download([FromQuery] string path)
     {
-        var full = _resolver.ResolvePath(path);
+        var full = ResolvePath(path);
         if (!System.IO.File.Exists(full))
             return NotFound();
         var fileName = Path.GetFileName(full);
@@ -45,7 +51,7 @@ public class FileController : ControllerBase
         if (file == null || file.Length == 0)
             return BadRequest("No file supplied");
 
-        var folder = _resolver.ResolvePath(path);
+        var folder = ResolvePath(path);
         if (!Directory.Exists(folder))
             return NotFound();
 
@@ -58,7 +64,7 @@ public class FileController : ControllerBase
     [HttpPost("mkdir")]
     public IActionResult CreateDirectory([FromQuery] string path)
     {
-        var full = _resolver.ResolvePath(path);
+        var full = ResolvePath(path);
         if (System.IO.File.Exists(full))
             return Conflict();
         Directory.CreateDirectory(full);
@@ -68,43 +74,142 @@ public class FileController : ControllerBase
     [HttpDelete]
     public IActionResult Delete([FromQuery] string path)
     {
-        _fileService.Delete(path);
+        var full = ResolvePath(path);
+        if (System.IO.File.Exists(full))
+            System.IO.File.Delete(full);
+        else if (Directory.Exists(full))
+            Directory.Delete(full, true);
+        else
+            return NotFound();
         return Ok();
     }
 
     [HttpPost("move")]
     public IActionResult Move([FromBody] PathRequest request)
     {
-        _fileService.Move(request.From, request.To);
-        return Ok();
+        try
+        {
+            ProcessPath(request.From, request.To,
+                (source, dest) => System.IO.File.Move(source, dest, true),
+                (source, dest) => Directory.Move(source, dest));
+            return Ok();
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound();
+        }
     }
 
     [HttpPost("copy")]
     public IActionResult Copy([FromBody] PathRequest request)
     {
-        _fileService.Copy(request.From, request.To);
-        return Ok();
+        try
+        {
+            ProcessPath(request.From, request.To,
+                (source, dest) => System.IO.File.Copy(source, dest, true),
+                (source, dest) => CopyDirectory(source, dest));
+            return Ok();
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound();
+        }
     }
 
     [HttpPost("zip")]
     public async Task<IActionResult> Zip([FromBody] PathsRequest request)
     {
-        try
+        if (request.Paths == null || request.Paths.Count == 0)
+            return BadRequest("No paths supplied");
+        var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, true))
         {
-            var stream = await _fileService.Zip(request.Paths);
-            return File(stream, "application/zip", "files.zip");
+            foreach (var relative in request.Paths)
+            {
+                var full = ResolvePath(relative);
+                await AddToArchive(archive, full);
+            }
         }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message);
-        }
+        ms.Position = 0;
+        return File(ms, "application/zip", "files.zip");
     }
 
     [HttpGet("search")]
     public IActionResult Search([FromQuery] string query)
     {
-        var result = _fileService.Search(query);
-        return Ok(result);
+        var files = Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories)
+            .Where(p => Path.GetFileName(p).Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Select(p => new FoundFile(Path.GetRelativePath(_root, p), new FileInfo(p).Length));
+        var directories = Directory.EnumerateDirectories(_root, "*", SearchOption.AllDirectories)
+            .Where(p => Path.GetFileName(p).Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Select(p => new FoundDirectory(Path.GetRelativePath(_root, p)));
+        return Ok(new SearchResult(files, directories));
+    }
+
+    private string ResolvePath(string? relative)
+    {
+        relative ??= string.Empty;
+        var combined = Path.GetFullPath(Path.Combine(_root, relative));
+        if (!combined.StartsWith(_root))
+            throw new InvalidOperationException("Invalid path");
+        return combined;
+    }
+
+    private void ProcessPath(string from, string to, Action<string, string> fileAction, Action<string, string> dirAction)
+    {
+        var source = ResolvePath(from);
+        var dest = ResolvePath(to);
+        if (System.IO.File.Exists(source))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            fileAction(source, dest);
+        }
+        else if (Directory.Exists(source))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            dirAction(source, dest);
+        }
+        else
+        {
+            throw new FileNotFoundException();
+        }
+    }
+
+    private async Task AddToArchive(ZipArchive archive, string fullPath)
+    {
+        if (System.IO.File.Exists(fullPath))
+        {
+            var entryPath = Path.GetRelativePath(_root, fullPath).Replace('\\', '/');
+            var entry = archive.CreateEntry(entryPath, CompressionLevel.Fastest);
+            await using var src = System.IO.File.OpenRead(fullPath);
+            await using var dest = entry.Open();
+            await src.CopyToAsync(dest);
+        }
+        else if (Directory.Exists(fullPath))
+        {
+            foreach (var file in Directory.EnumerateFiles(fullPath, "*", SearchOption.AllDirectories))
+            {
+                var entryPath = Path.GetRelativePath(_root, file).Replace('\\', '/');
+                var entry = archive.CreateEntry(entryPath, CompressionLevel.Fastest);
+                await using var src = System.IO.File.OpenRead(file);
+                await using var dest = entry.Open();
+                await src.CopyToAsync(dest);
+            }
+        }
+    }
+
+    private static void CopyDirectory(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var targetFilePath = Path.Combine(destDir, Path.GetFileName(file));
+            System.IO.File.Copy(file, targetFilePath, true);
+        }
+        foreach (var directory in Directory.GetDirectories(sourceDir))
+        {
+            var targetDirPath = Path.Combine(destDir, Path.GetFileName(directory));
+            CopyDirectory(directory, targetDirPath);
+        }
     }
 }
-

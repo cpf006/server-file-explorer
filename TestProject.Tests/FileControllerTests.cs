@@ -173,16 +173,16 @@ public class FileControllerTests : IAsyncLifetime
 
     private class SearchResponse
     {
-        public DirectoryResult[] Directories { get; set; } = Array.Empty<DirectoryResult>();
-        public FileResult[] Files { get; set; } = Array.Empty<FileResult>();
+        public FoundDirectory[] Directories { get; set; } = Array.Empty<FoundDirectory>();
+        public FoundFile[] Files { get; set; } = Array.Empty<FoundFile>();
     }
 
-    private class DirectoryResult
+    private class FoundDirectory
     {
         public string Path { get; set; } = string.Empty;
     }
 
-    private class FileResult
+    private class FoundFile
     {
         public string Path { get; set; } = string.Empty;
         public long Size { get; set; }

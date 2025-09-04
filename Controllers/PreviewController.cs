@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.Extensions.Options;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Xml.Linq;
-using TestProject.Services;
 
 namespace TestProject.Controllers;
 
@@ -12,18 +12,18 @@ namespace TestProject.Controllers;
 [Route("api/preview")]
 public class PreviewController : ControllerBase
 {
-    private readonly PathResolver _resolver;
+    private readonly string _root;
     private readonly FileExtensionContentTypeProvider _contentTypeProvider = new();
 
-    public PreviewController(PathResolver resolver)
+    public PreviewController(IOptions<FileExplorerOptions> options)
     {
-        _resolver = resolver;
+        _root = Path.GetFullPath(options.Value.RootPath ?? Directory.GetCurrentDirectory());
     }
 
     [HttpGet]
     public IActionResult Get([FromQuery] string path)
     {
-        var full = _resolver.ResolvePath(path);
+        var full = ResolvePath(path);
         if (!System.IO.File.Exists(full))
             return NotFound();
 
@@ -39,6 +39,15 @@ public class PreviewController : ControllerBase
             contentType = "application/octet-stream";
 
         return PhysicalFile(full, contentType);
+    }
+
+    private string ResolvePath(string? relative)
+    {
+        relative ??= string.Empty;
+        var combined = Path.GetFullPath(Path.Combine(_root, relative));
+        if (!combined.StartsWith(_root))
+            throw new InvalidOperationException("Invalid path");
+        return combined;
     }
 
     private static string KmlToGeoJson(string kmlContent)
