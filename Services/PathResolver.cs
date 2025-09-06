@@ -10,7 +10,7 @@ public class PathResolver
 
     public PathResolver(IOptions<FileExplorerOptions> options)
     {
-        _root = Path.GetFullPath(options.Value.RootPath ?? Directory.GetCurrentDirectory());
+        _root = Path.GetFullPath(options.Value.RootPath);
     }
 
     public string Resolve(string? relative)
