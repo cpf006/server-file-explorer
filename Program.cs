@@ -18,6 +18,8 @@ namespace TestProject {
             builder.Services.Configure<FileExplorerOptions>(builder.Configuration.GetSection("FileExplorer"));
             builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = long.MaxValue);
             builder.Services.AddSingleton<PathResolver>();
+            builder.Services.AddSingleton<FileService>();
+            builder.Services.AddSingleton<PreviewService>();
 
             builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = long.MaxValue);
 
