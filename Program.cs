@@ -1,17 +1,12 @@
 using System.IO;
-using TestProject.Services;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Options;
+using TestProject.Services;
 
 namespace TestProject {
     public class Program {
         public static void Main(string[] args) {
             var builder = WebApplication.CreateBuilder(args);
-
-            var defaultRoot = Path.Combine(AppContext.BaseDirectory, "DefaultDirectory");
-            if (!Directory.Exists(defaultRoot)) {
-                Directory.CreateDirectory(defaultRoot);
-                File.WriteAllText(Path.Combine(defaultRoot, "readme.txt"), "Drop files here.");
-            }
 
             builder.Services.AddControllers();
             builder.Services.AddHttpsRedirection(options => options.HttpsPort = 5001);
@@ -24,6 +19,11 @@ namespace TestProject {
             builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = long.MaxValue);
 
             var app = builder.Build();
+
+            var options = app.Services.GetRequiredService<IOptions<FileExplorerOptions>>().Value;
+            var rootPath = Path.GetFullPath(options.RootPath);
+            if (!Directory.Exists(rootPath))
+                Directory.CreateDirectory(rootPath);
 
             app.UseHttpsRedirection();
             app.UseDefaultFiles();
